@@ -65,6 +65,17 @@ Ariba PAM employs a microservice-oriented, zero-trust architecture physically se
 - **Immutable Storage Bucket**: S3-compliant object store configured with Object Lock (WORM compliance).
 - Administered through dedicated Evidence Custodian IAM credentials; standard PAM administrators cannot overwrite or purge recordings.
 
+### E. Enterprise Web Console (Next.js / React / TypeScript / Tailwind CSS)
+- **Framework & UI Foundation**: Next.js (React), TypeScript, Tailwind CSS, and `shadcn/ui` (accessible WAI-ARIA Radix UI primitives).
+- **Client State & Caching**: TanStack Query (React Query) for automated query caching, optimistic UI updates, and real-time invalidation.
+- **Type-Safe Integration**: TypeScript interfaces generated directly from the Control Plane's OpenAPI 3.1 schema.
+- **Interactive Web Terminal & Player**:
+  - `xterm.js` terminal emulator for direct browser-based interactive SSH sessions over secure WebSockets.
+  - `asciinema-player` with timeline scrubbing, speed toggles (0.5x–4x), and full transcript keyword search for auditors.
+- **Hierarchical Scope & Matrix Explorer**: Interactive visual tree rendering organizational scopes, asset tiers, and granular role assignments.
+- **Lab Minimal Portal**: The lightweight vanilla HTML/JS portal (`/portal`) is retained inside the control plane for zero-dependency CI runs and offline testing.
+
+
 ---
 
 ## 3. Network Topologies & Traffic Segmentation

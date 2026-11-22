@@ -10,7 +10,7 @@ This repository contains the product and engineering baseline, a Python control 
 | --- | --- | --- |
 | 01 | [Project overview](docs/01-PROJECT-OVERVIEW.md) | Vision, problem statement, boundaries, and pilot scope |
 | 02 | [Product requirements](docs/02-PRODUCT-REQUIREMENTS.md) | Business (BR), functional (FR), and non-functional (NFR) requirements |
-| 03 | [System architecture](docs/03-SYSTEM-ARCHITECTURE.md) | System components, network topologies, and trust boundaries |
+| 03 | [System architecture](docs/03-SYSTEM-ARCHITECTURE.md) | Microservice architecture, Enterprise Web Console, network topologies, and trust boundaries |
 | 04 | [API specification](docs/04-API-SPECIFICATION.md) | REST API contract, error handling, and authorization endpoints |
 | 05 | [Database schema](docs/05-DATABASE-SCHEMA.md) | Relational data models, constraints, and audit persistence |
 | 06 | [Identity and access management](docs/06-IDENTITY-AND-ACCESS-MANAGEMENT.md) | OIDC federation, phishing-resistant MFA, and account disablement propagation |
@@ -21,14 +21,12 @@ This repository contains the product and engineering baseline, a Python control 
 | 11 | [Approval and delegation](docs/11-APPROVAL-AND-DELEGATION.md) | Workflow routing, immutable revisions, and 7 delegation rules |
 | 12 | [Credential vault design](docs/12-CREDENTIAL-VAULT-DESIGN.md) | Ephemeral SSH certificate authority, key rollover, and vault secret injection |
 | 13 | [Security requirements](docs/13-SECURITY-REQUIREMENTS.md) | Threat modeling, 10 core controls, and verification test mapping |
-| 13A | [Authentication and authorization](docs/authentication-authorization.md) | Identity sources, MFA, RBAC, resource scope, revocation, and service authorization |
-| 11A | [OpenAPI 3.1 specification](docs/openapi.yaml) | Machine-readable v1.1 API routes, schemas, security, and error contracts |
-| 14 | [Technology stack](docs/14-TECHNOLOGY-STACK.md) | Proposed components and selection criteria |
-| 15 | [Session gateway design](docs/15-SESSION-GATEWAY-DESIGN.md) | Go SSH gateway proxy, host pinning, and bounded local lease enforcement |
-| 16 | [Audit and evidence management](docs/16-AUDIT-AND-EVIDENCE-MANAGEMENT.md) | Transactional outbox, terminal recordings, and WORM evidence custody |
-| 17 | [Integration architecture](docs/17-INTEGRATION-ARCHITECTURE.md) | Enterprise IdP, Wazuh SIEM, Ariba SOC, and ITSM adapters |
-| 18 | [Workflow state machine](docs/18-WORKFLOW-STATE-MACHINE.md) | Object lifecycles, state transition tables, and invariants |
-| 19 | [Development roadmap](docs/19-DEVELOPMENT-ROADMAP.md) | Milestone phases, task dependencies, and backlog |
+| 14 | [Session gateway design](docs/14-SESSION-GATEWAY-DESIGN.md) | Go SSH gateway proxy, host pinning, and bounded local lease enforcement |
+| 15 | [Audit and evidence management](docs/15-AUDIT-AND-EVIDENCE-MANAGEMENT.md) | Transactional outbox, terminal recordings, and WORM evidence custody |
+| 16 | [Integration architecture](docs/16-INTEGRATION-ARCHITECTURE.md) | Enterprise IdP, Wazuh SIEM, Ariba SOC, and ITSM adapters |
+| 17 | [Workflow state machine](docs/17-WORKFLOW-STATE-MACHINE.md) | Object lifecycles, state transition tables, and invariants |
+| 18 | [Development roadmap](docs/18-DEVELOPMENT-ROADMAP.md) | Milestone phases, task dependencies, and backlog |
+| — | [OpenAPI 3.1 specification](docs/openapi.yaml) | Machine-readable v1.1 API routes, schemas, security, and error contracts |
 
 ## Start Phase 0
 

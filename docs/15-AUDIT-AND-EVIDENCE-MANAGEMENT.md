@@ -48,11 +48,14 @@ To eliminate the classic distributed systems "dual-write" failure (where a datab
 1. **Explicit Scope Enforcement**:
    - Only users with the `auditor` or `security_operator` role bound to the asset's resource scope can view recording metadata or authorize playback.
    - Cross-scope playback attempts return **HTTP 404 Not Found**.
-2. **Short-Lived Streaming Tokens**:
-   - Playback URLs are pre-signed with short expiration windows (e.g. 15 minutes) and locked to the auditor's IP.
+2. **Next.js Web Player & Streaming**:
+   - The Enterprise Web Console embeds a hardened `asciinema-player` component.
+   - Features include: interactive timeline scrubbing, pause/play, variable playback speeds (0.5x, 1x, 2x, 4x), timestamp jump points, and full-text terminal transcript search.
+   - Streaming URLs are pre-signed with short expiration windows (e.g. 15 minutes), locked to the auditor's IP, and cannot be cached.
 3. **Auditable Evidence Exports**:
    - Creating an evidence export bundle requires an explicit operational justification.
-   - Every export job is recorded in the audit outbox with the auditor ID, correlation reference, and target scope.
+   - Every export job is recorded in the audit outbox with the auditor ID, correlation reference, target scope, and SHA-256 manifest.
+
 
 ---
 
