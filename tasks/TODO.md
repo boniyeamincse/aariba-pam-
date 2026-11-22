@@ -46,11 +46,10 @@ Completed Phase 4 tasks (P4-01, P4-02) with verification evidence have been move
 
 Use [audit and recovery](../specifications/modules/audit-and-recovery.md), [security event contracts](../specifications/integrations/security-events.md), and the [pilot test catalog](../docs/16-TESTING-STRATEGY.md#pilot-test-catalog).
 
-Completed Phase 5 tasks (P5-01, P5-02, P5-04, P5-05) have been verified and moved to [COMPLETED.md](COMPLETED.md).
+Completed Phase 5 tasks (P5-01, P5-02, P5-03, P5-04, P5-05) have been verified and moved to [COMPLETED.md](COMPLETED.md).
 
 | ID | Task | Depends on | Check or reference | Completion check |
 | --- | --- | --- | --- | --- |
-| P5-03 | Handle recording and audit delivery failure at the gateway | P5-01, P5-02 | FR-08, NFR-03, T-07 | Block unsafe launches. Pause forwarding on capture loss and terminate after the approved limit. Alert on evidence gaps |
 | P5-06 | Configure pilot SOC alerts and health monitoring | P5-03 | FR-10, NFR-08, T-07, T-10 | Test alerts for capture, evidence delivery, renewal, and signing failures through the approved receiving path |
 | P5-07 | Run backup and restore rehearsal | P5-01, P5-02 | NFR-04, T-09 | Measure RTO and RPO. Verify restored evidence and confirm stale grants stay closed |
 | P5-08 | Drill out-of-band emergency access | P5-06 | FR-11, T-09 | Simulate PAM and IdP outage. Record scoped access, SOC notice, independent evidence, review, and cleanup |

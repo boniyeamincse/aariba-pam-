@@ -153,13 +153,32 @@ func (c *ControlPlaneClient) RenewLease(ctx context.Context, sessionID string) (
 	}, nil
 }
 
+// RecordingPayload carries terminal recording metadata for evidence ingestion.
+type RecordingPayload struct {
+	RecordingID     string `json:"recording_id,omitempty"`
+	DigestSHA256    string `json:"digest_sha256"`
+	StorageURI      string `json:"storage_uri"`
+	SizeBytes       int    `json:"size_bytes"`
+	DurationSeconds int    `json:"duration_seconds"`
+	CoverageStatus  string `json:"coverage_status"`
+}
+
 // SendEvent reports session lifecycle events to the control plane.
 func (c *ControlPlaneClient) SendEvent(ctx context.Context, sessionID, state, reason string) error {
+	return c.SendEventWithRecording(ctx, sessionID, state, reason, nil)
+}
+
+// SendEventWithRecording reports session lifecycle events along with recording integrity metadata.
+func (c *ControlPlaneClient) SendEventWithRecording(ctx context.Context, sessionID, state, reason string, rec *RecordingPayload) error {
 	payload := map[string]interface{}{
 		"state":     state,
 		"reason":    reason,
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
+	if rec != nil {
+		payload["recording"] = rec
+	}
+
 	bodyBytes, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -183,3 +202,4 @@ func (c *ControlPlaneClient) SendEvent(ctx context.Context, sessionID, state, re
 	}
 	return nil
 }
+

@@ -13,9 +13,10 @@ import (
 
 // Server is the SSH Gateway listening service.
 type Server struct {
-	Config   *Config
-	CPClient *ControlPlaneClient
-	listener net.Listener
+	Config        *Config
+	CPClient      *ControlPlaneClient
+	RecordingSink RecordingSink
+	listener      net.Listener
 
 	mu       sync.Mutex
 	sessions map[string]*ActiveSession
@@ -26,10 +27,26 @@ type Server struct {
 func NewServer(cfg *Config) *Server {
 	cpClient := NewControlPlaneClient(cfg.ControlPlaneURL, cfg.GatewayID, cfg.GatewaySecret)
 	return &Server{
-		Config:   cfg,
-		CPClient: cpClient,
-		sessions: make(map[string]*ActiveSession),
+		Config:        cfg,
+		CPClient:      cpClient,
+		RecordingSink: NewMemoryRecordingSink(),
+		sessions:      make(map[string]*ActiveSession),
 	}
+}
+
+// CheckPipelineReady verifies whether the recording storage sink is available.
+func (s *Server) CheckPipelineReady() error {
+	if s.RecordingSink != nil {
+		if mem, ok := s.RecordingSink.(*MemoryRecordingSink); ok {
+			mem.mu.Lock()
+			fail := mem.fail || mem.closed
+			mem.mu.Unlock()
+			if fail {
+				return fmt.Errorf("recording storage sink is failing or unavailable")
+			}
+		}
+	}
+	return nil
 }
 
 // Start begins listening for incoming client SSH connections.
@@ -144,6 +161,19 @@ func (s *Server) handleConn(netConn net.Conn, sshConfig *ssh.ServerConfig) {
 			return
 		}
 
+		// Fail-closed rule: Block unsafe launches if recording pipeline is degraded
+		if err := s.CheckPipelineReady(); err != nil {
+			log.Printf("[Gateway] Unsafe launch blocked: %v", err)
+			alert := "\r\n\x1b[31;1m[SECURITY ERROR: Session recording pipeline unavailable. Launch blocked by policy.]\x1b[0m\r\n"
+			_, _ = clientChannel.Write([]byte(alert))
+			_ = clientChannel.Close()
+
+			reportCtx, cancelReport := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = s.CPClient.SendEvent(reportCtx, launchResp.SessionID, "failed", "Unsafe launch blocked: recording pipeline unavailable")
+			cancelReport()
+			return
+		}
+
 		// Connect to target host
 		targetAddr := fmt.Sprintf("%s:%d", launchResp.TargetHost, launchResp.TargetPort)
 		targetConfig := &ssh.ClientConfig{
@@ -208,6 +238,9 @@ func (s *Server) handleConn(netConn net.Conn, sshConfig *ssh.ServerConfig) {
 			launchResp.LeaseDeadline,
 			launchResp.GrantExpiry,
 		)
+		if s.RecordingSink != nil {
+			session.SetRecorder(NewSessionRecorder(session.SessionID, s.RecordingSink, 10*1024*1024, 30*time.Second, nil))
+		}
 
 		s.mu.Lock()
 		s.sessions[session.SessionID] = session

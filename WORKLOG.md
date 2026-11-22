@@ -9,12 +9,12 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 5 Active (Evidence Custodian, WORM Verification & Scoped Exports Complete)
+- **Current Milestone**: Phase 5 Active (Gateway Evidence Failure Handling & WORM Verification Complete)
 - **Control Plane Test Health**: `58 passed, 2 skipped` (`DEBUG=false pytest -v`)
-- **Gateway Test Health**: `3 passed` (`cd gateway && go test -v ./...`)
+- **Gateway Test Health**: `7 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
 - **Database Migration State**: Alembic head (`0003_evidence_and_recordings.py`)
-- **Security Invariants**: Default Deny, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Transactional Audit Outbox.
+- **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Transactional Audit Outbox.
 
 ---
 
@@ -33,7 +33,31 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 9: Evidence Custodian, WORM Verification & Scoped Exports (`P5-01, P5-02, P5-04, P5-05`) (Current)
+### Session 10: Gateway Evidence Failure Handling & Grace Period Auto-Termination (`P5-03`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Fail-Closed Recording Pipeline & Buffering (`gateway/recorder.go`)**:
+     - Created `SessionRecorder` with bounded in-memory buffer (10 MB default) and streaming SHA-256 digest calculation.
+     - Implemented fail-closed buffering: on sink/storage failure or network partition, marks `degraded = true` and updates coverage to `gap`.
+     - Added configurable grace period timer (30s default) triggering automatic session termination if storage is not restored.
+  2. **Unsafe Launch Blocking (`gateway/server.go`)**:
+     - Added `CheckPipelineReady()` readiness check before target SSH dialing.
+     - Blocks unsafe session launches immediately if the recording pipeline/sink is degraded, presenting a security error banner to the client and reporting `state: "failed"` to the Control Plane.
+  3. **Bi-Directional Stream Interception & Alert Banners (`gateway/session.go`)**:
+     - Intercepts all client stdin and target stdout/stderr traffic into the session recorder.
+     - Injects terminal security alert banner to the user if capture is interrupted: `[SECURITY ALERT: Session recording pipeline interrupted. Forwarding paused. Session will terminate in 30s if not restored.]`.
+     - Automatically pauses forwarding if the recording buffer fills to capacity (`ErrRecordingBufferFull`).
+  4. **Reporting with Recording Metadata (`gateway/client.go`)**:
+     - Added `SendEventWithRecording` transmitting `digest_sha256`, `size_bytes`, `duration_seconds`, and `coverage_status` (`complete` or `gap`) upon session conclusion.
+  5. **Verification & Tests (`gateway/gateway_test.go`)**:
+     - Added 4 dedicated tests: normal recording & SHA-256 digest, degradation & gap detection, 100ms grace period auto-termination, and unsafe launch blocking.
+- **Verified Evidence**:
+  - `cd gateway && go test -v ./...`: **7 passed** (in 2.11s).
+  - `DEBUG=false pytest -v`: **58 passed, 2 skipped** (in 3.76s).
+
+---
+
+### Session 9: Evidence Custodian, WORM Verification & Scoped Exports (`P5-01, P5-02, P5-04, P5-05`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Database Schema & Migrations (`src/ariba_pam/db/models.py`, `alembic/versions/0003_evidence_and_recordings.py`)**:
@@ -191,16 +215,13 @@ The following tasks are prioritized for execution:
 [Phase 3 Complete ✓] ──► [Phase 4 Ephemeral CA Complete ✓] ──► [Phase 5 Evidence & Web Console Active]
 ```
 
-### Priority 1: Gateway Evidence Failure Handling (`P5-03`)
-- **Objective**: Handle recording and audit delivery failure at the Go SSH gateway (`FR-08`, `NFR-03`, `T-07`).
-  - Block unsafe launches if recording pipeline is degraded.
-  - Pause stream forwarding on capture loss and auto-terminate session after approved grace limit (30s).
-  - Alert Control Plane on evidence gaps (`coverage_status = "gap"`).
-- **Target Files**: `gateway/session.go`, `gateway/server.go`, `tests/test_audit_exports.py`
-
-### Priority 2: Pilot SOC Alerts & Health Monitoring (`P5-06`)
+### Priority 1: Pilot SOC Alerts & Health Monitoring (`P5-06`)
 - **Objective**: Configure pilot SOC alerts and health monitoring for capture loss, evidence delivery outage, lease renewal failure, and CA signing errors (`FR-10`, `NFR-08`, `T-07`, `T-10`).
 - **Target Files**: `src/ariba_pam/services/notifications.py`, `src/ariba_pam/api/internal/gateway.py`
+
+### Priority 2: Backup and Restore Rehearsal (`P5-07`)
+- **Objective**: Run backup and restore rehearsal, measure RTO and RPO, verify restored evidence, and confirm stale grants stay closed (`NFR-04`, `T-09`).
+- **Target Files**: `tests/test_backup_restore.py`
 
 ---
 

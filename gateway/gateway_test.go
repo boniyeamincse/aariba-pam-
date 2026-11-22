@@ -167,3 +167,110 @@ func TestActiveSessionLeaseExpiryTermination(t *testing.T) {
 		t.Fatal("session did not terminate locally upon lease expiry")
 	}
 }
+
+func TestRecordingCaptureAndDigest(t *testing.T) {
+	sink := NewMemoryRecordingSink()
+	rec := NewSessionRecorder("ses_rec_01", sink, 1024*1024, 30*time.Second, nil)
+
+	chunk1 := []byte("uname -a\n")
+	chunk2 := []byte("Linux payment-db-01 6.8.0-enterprise\n")
+
+	if err := rec.RecordChunk(chunk1); err != nil {
+		t.Fatalf("RecordChunk failed: %v", err)
+	}
+	if err := rec.RecordChunk(chunk2); err != nil {
+		t.Fatalf("RecordChunk failed: %v", err)
+	}
+
+	summary := rec.GetSummary()
+	if summary.SizeBytes != len(chunk1)+len(chunk2) {
+		t.Errorf("expected size %d, got %d", len(chunk1)+len(chunk2), summary.SizeBytes)
+	}
+	if summary.CoverageStatus != "complete" {
+		t.Errorf("expected complete coverage, got %s", summary.CoverageStatus)
+	}
+	if len(summary.DigestSHA256) != 64 {
+		t.Errorf("expected 64-char hex SHA256 digest, got %s", summary.DigestSHA256)
+	}
+}
+
+func TestRecordingCaptureDegradationAndGapDetection(t *testing.T) {
+	sink := NewMemoryRecordingSink()
+	rec := NewSessionRecorder("ses_gap_01", sink, 64, 30*time.Second, nil)
+
+	// 1. Initial write succeeds
+	if err := rec.RecordChunk([]byte("initial traffic")); err != nil {
+		t.Fatalf("initial write failed: %v", err)
+	}
+	if rec.IsDegraded() {
+		t.Error("expected recorder to be healthy")
+	}
+
+	// 2. Simulate storage failure (e.g. S3 outage / network partition)
+	sink.SetFailing(true)
+
+	// Write while failing -> enters degraded state and marks gap
+	err := rec.RecordChunk([]byte("traffic during outage"))
+	if err == nil {
+		t.Error("expected error when sink is failing")
+	}
+	if !rec.IsDegraded() {
+		t.Error("expected recorder to be marked degraded")
+	}
+	if rec.CoverageStatus() != "gap" {
+		t.Errorf("expected coverage status 'gap', got %s", rec.CoverageStatus())
+	}
+
+	// Buffer overflow returns ErrRecordingBufferFull
+	largeChunk := make([]byte, 128)
+	err = rec.RecordChunk(largeChunk)
+	if err != ErrRecordingBufferFull {
+		t.Errorf("expected ErrRecordingBufferFull, got %v", err)
+	}
+}
+
+func TestRecordingGracePeriodAutoTermination(t *testing.T) {
+	sink := NewMemoryRecordingSink()
+	sink.SetFailing(true) // Immediate failure
+
+	timeoutFired := make(chan string, 1)
+	// Fast grace period (100ms) for test verification
+	rec := NewSessionRecorder("ses_timeout_01", sink, 1024, 100*time.Millisecond, func(reason string) {
+		timeoutFired <- reason
+	})
+
+	// Trigger write to start grace timer
+	_ = rec.RecordChunk([]byte("critical admin activity"))
+
+	select {
+	case reason := <-timeoutFired:
+		if reason == "" {
+			t.Error("expected non-empty termination reason")
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("fail-closed grace period timeout did not fire within expected duration")
+	}
+}
+
+func TestUnsafeLaunchBlockedOnPipelineDegraded(t *testing.T) {
+	cfg, err := DefaultConfig()
+	if err != nil {
+		t.Fatalf("failed to create default config: %v", err)
+	}
+
+	server := NewServer(cfg)
+	// Pipeline healthy -> launch permitted
+	if err := server.CheckPipelineReady(); err != nil {
+		t.Errorf("expected pipeline to be ready, got: %v", err)
+	}
+
+	// Degrade recording sink -> launch blocked (fail-closed)
+	memSink := server.RecordingSink.(*MemoryRecordingSink)
+	memSink.SetFailing(true)
+
+	err = server.CheckPipelineReady()
+	if err == nil {
+		t.Error("expected CheckPipelineReady to fail when sink is degraded")
+	}
+}
+
