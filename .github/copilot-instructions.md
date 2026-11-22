@@ -60,7 +60,8 @@ ariba_pam/
 ├── tests/                        # Automated Pytest Suite
 │   ├── conftest.py               # Database fixtures, mocked OIDC, synthetic identities
 │   └── test_*.py                 # Unit and integration test suites
-└── alembic/                      # Database Schema Migrations
+├── alembic/                      # Database Schema Migrations
+└── WORKLOG.md                    # Universal AI work log and handover state tracker
 ```
 
 ## 2. Mandatory Coding Conventions & Invariants

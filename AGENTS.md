@@ -94,9 +94,15 @@ ariba_pam/
 │   └── lib/                      # Generated OpenAPI TypeScript client
 ├── AGENTS.md                     # Agentic coding instructions (this file)
 ├── CLAUDE.md                     # Instructions for Claude Code / OpenCode
+├── WORKLOG.md                    # Universal AI work log and handover state tracker
 ├── README.md                     # Repository entry point and document index
 └── pyproject.toml                # Python package metadata and dependencies
 ```
+
+> **Mandatory AI Turn Start & End**:
+> 1. At the start of your turn, read [`WORKLOG.md`](WORKLOG.md) to understand recent progress and pick the top item from the next tasks queue.
+> 2. At the end of your turn, update [`WORKLOG.md`](WORKLOG.md) with your changes, test results, and next unblocked tasks.
+
 
 ---
 

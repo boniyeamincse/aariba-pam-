@@ -1,6 +1,6 @@
 # Ariba PAM Project Guidance for Claude & OpenCode
 
-Follow [AGENTS.md](AGENTS.md) and [.github/copilot-instructions.md](.github/copilot-instructions.md) for full enterprise repository layout, layer separation rules, and mandatory security invariants.
+Follow [AGENTS.md](AGENTS.md), [WORKLOG.md](WORKLOG.md), and [.github/copilot-instructions.md](.github/copilot-instructions.md) for full enterprise repository layout, layer separation rules, active task status, and mandatory security invariants.
 
 ## Quick Summary
 - **Product Name**: Ariba PAM (Zero Standing Privilege platform).
