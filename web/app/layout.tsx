@@ -9,6 +9,7 @@ import {
   Terminal,
   Activity,
   Lock,
+  Video,
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -88,6 +89,20 @@ export default function RootLayout({
               >
                 <Terminal className="w-4 h-4 text-slate-400" />
                 <span>Active Sessions</span>
+              </Link>
+              <Link
+                href="/terminal"
+                className="px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-md transition-colors flex items-center space-x-2"
+              >
+                <Terminal className="w-4 h-4 text-emerald-400" />
+                <span>Web Terminal</span>
+              </Link>
+              <Link
+                href="/audit"
+                className="px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-md transition-colors flex items-center space-x-2"
+              >
+                <Video className="w-4 h-4 text-blue-400" />
+                <span>Audit Forensics</span>
               </Link>
             </div>
           </nav>
