@@ -1,0 +1,2030 @@
+openapi: 3.1.0
+info:
+  title: Ariba PAM API
+  version: 1.1.0
+  description: |
+    Ariba PAM privileged access management API v1.1.
+    Browser APIs require an authenticated session and CSRF protection.
+    Internal APIs require mutually authenticated service identities.
+  license:
+    name: Proprietary
+servers:
+  - url: /api/v1
+    description: Public portal API
+  - url: /
+    description: Internal service API
+security:
+  - BrowserSession: []
+
+tags:
+  - name: Identity
+  - name: RBAC
+  - name: Assets
+  - name: Accounts
+  - name: Vault
+  - name: Requests
+  - name: Approvals
+  - name: Grants
+  - name: Sessions
+  - name: Emergency
+  - name: Rotation
+  - name: Discovery
+  - name: Integrations
+  - name: Notifications
+  - name: Reports
+  - name: Audit
+  - name: Health
+  - name: Administration
+  - name: Internal Gateway
+
+components:
+  securitySchemes:
+    BrowserSession:
+      type: apiKey
+      in: cookie
+      name: pam_session
+    GatewayIdentity:
+      type: mutualTLS
+
+  parameters:
+    XRequestId:
+      name: X-Request-ID
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+        pattern: '^[A-Za-z0-9._-]+$'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Required for non-idempotent state-changing operations.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+        pattern: '^[A-Za-z0-9._-]+$'
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+        maxLength: 4096
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  headers:
+    ETag:
+      description: Resource version for optimistic concurrency.
+      schema:
+        type: string
+    RetryAfter:
+      description: Seconds before retrying.
+      schema:
+        type: integer
+        minimum: 1
+
+  responses:
+    Unauthorized:
+      description: Authentication required.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Authenticated caller lacks role or resource scope.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Missing or concealed resource.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Invalid state, stale resource version, or idempotency conflict.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Validation:
+      description: Request validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServiceUnavailable:
+      description: Required authorization or evidence service unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id]
+      properties:
+        code:
+          type: string
+          examples: [UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, STALE_RESOURCE_VERSION, IDENTITY_KEY_REUSE]
+        message:
+          type: string
+          maxLength: 500
+        request_id:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+
+    CursorPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {}
+        next_cursor:
+          type: string
+          nullable: true
+
+    Timestamp:
+      type: string
+      format: date-time
+
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, subject, display_name, status]
+      properties:
+        id: {type: string, example: user_demo}
+        subject: {type: string, example: catalog-demo}
+        display_name: {type: string, example: Demo Privileged User}
+        email: {type: string, format: email, example: catalog-demo@example.test}
+        status: {type: string, enum: [active, suspended, disabled, locked]}
+        version: {type: integer, minimum: 0}
+        created_at: {$ref: '#/components/schemas/Timestamp'}
+        updated_at: {$ref: '#/components/schemas/Timestamp'}
+
+    Asset:
+      type: object
+      additionalProperties: false
+      required: [id, name, type, status]
+      properties:
+        id: {type: string, example: asset_demo}
+        name: {type: string, minLength: 1, maxLength: 200}
+        type:
+          type: string
+          enum: [linux_server, windows_server, network_device, firewall, database_server, cloud_infrastructure, virtualization_platform, kubernetes_infrastructure]
+        address: {type: string, maxLength: 500}
+        zone: {type: string, example: lab-zone-a}
+        status: {type: string, enum: [active, disabled, unreachable]}
+        version: {type: integer, minimum: 0}
+
+    PrivilegedAccount:
+      type: object
+      additionalProperties: false
+      required: [id, asset_id, name, category, status]
+      properties:
+        id: {type: string, example: account_demo}
+        asset_id: {type: string, example: asset_demo}
+        name: {type: string, maxLength: 200}
+        category:
+          type: string
+          enum: [root, administrator, service_account, database_administrator, network_administrator, privileged_account]
+        vault_secret_id: {type: string, nullable: true}
+        status: {type: string, enum: [active, disabled, verification_failed]}
+        version: {type: integer, minimum: 0}
+
+    AccessRequest:
+      type: object
+      additionalProperties: false
+      required: [id, revision_id, asset_id, target_account_id, requested_start_at, requested_end_at, justification, state]
+      properties:
+        id: {type: string, example: req_demo}
+        revision_id: {type: string, example: rev_demo}
+        asset_id: {type: string, example: asset_demo}
+        target_account_id: {type: string, example: account_demo}
+        requested_start_at: {$ref: '#/components/schemas/Timestamp'}
+        requested_end_at: {$ref: '#/components/schemas/Timestamp'}
+        justification: {type: string, minLength: 10, maxLength: 2000}
+        ticket_ref: {type: string, maxLength: 200, nullable: true}
+        state: {type: string, enum: [pending, approved, rejected, cancelled, expired]}
+        policy_version_id: {type: string}
+
+    Grant:
+      type: object
+      additionalProperties: false
+      required: [id, subject, target_asset_id, target_account_id, effective_start_at, effective_end_at, status]
+      properties:
+        id: {type: string, example: grant_demo}
+        subject: {type: string, example: user_demo}
+        target_asset_id: {type: string, example: asset_demo}
+        target_account_id: {type: string, example: account_demo}
+        effective_start_at: {$ref: '#/components/schemas/Timestamp'}
+        effective_end_at: {$ref: '#/components/schemas/Timestamp'}
+        status: {type: string, enum: [active, expired, revoked]}
+
+    Session:
+      type: object
+      additionalProperties: false
+      required: [id, grant_id, gateway_id, status]
+      properties:
+        id: {type: string, example: session_demo}
+        grant_id: {type: string, example: grant_demo}
+        gateway_id: {type: string, example: gateway_demo}
+        status: {type: string, enum: [requested, active, paused, terminated, ended, expired]}
+        reason_code: {type: string, nullable: true}
+        started_at: {$ref: '#/components/schemas/Timestamp'}
+        ended_at: {$ref: '#/components/schemas/Timestamp'}
+
+    Role:
+      type: object
+      additionalProperties: false
+      required: [id, name, permissions]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        description: {type: string}
+        permissions:
+          type: array
+          items: {type: string}
+        scope_ids:
+          type: array
+          items: {type: string}
+        version: {type: integer, minimum: 0}
+
+paths:
+  /me:
+    get:
+      tags: [Identity]
+      operationId: getCurrentPrincipal
+      description: Requires authenticated browser session. Returns permitted scope summaries.
+      responses:
+        '200': {description: Current principal, content: {application/json: {schema: {$ref: '#/components/schemas/User'}}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+
+  /auth/methods:
+    get:
+      tags: [Identity]
+      operationId: listAuthMethods
+      responses:
+        '200': {description: Enabled authentication methods, content: {application/json: {schema: {type: object, properties: {methods: {type: array, items: {type: string, enum: [totp, webauthn, oidc, saml, ldap]}}}}}}}
+
+  /auth/mfa/enroll:
+    post:
+      tags: [Identity]
+      operationId: enrollMfa
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/XRequestId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [method]
+              properties:
+                method: {type: string, enum: [totp, webauthn]}
+      responses:
+        '201': {description: Enrollment started}
+
+  /auth/mfa/verify:
+    post:
+      tags: [Identity]
+      operationId: verifyMfa
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challenge_id, code]
+              properties:
+                challenge_id: {type: string}
+                code: {type: string, minLength: 6, maxLength: 12}
+      responses:
+        '200': {description: MFA verified}
+
+  /auth/mfa/disable:
+    post:
+      tags: [Identity]
+      operationId: disableMfa
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [step_up_token]
+              properties:
+                step_up_token: {type: string}
+      responses:
+        '200': {description: MFA disabled}
+
+  /auth/mfa/recovery-codes:
+    post:
+      tags: [Identity]
+      operationId: generateRecoveryCodes
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [step_up_token]
+              properties:
+                step_up_token: {type: string}
+      responses:
+        '201': {description: Recovery codes generated}
+
+  /auth/step-up:
+    post:
+      tags: [Identity]
+      operationId: startStepUp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purpose]
+              properties:
+                purpose: {type: string, enum: [credential_access, policy_change, emergency_access, session_termination, audit_export, role_assignment]}
+      responses:
+        '200': {description: Step-up challenge issued}
+
+  /auth/devices:
+    get:
+      tags: [Identity]
+      operationId: listTrustedDevices
+      responses:
+        '200': {description: Trusted devices, content: {application/json: {schema: {$ref: '#/components/schemas/CursorPage'}}}}
+
+  /auth/devices/{device_id}:
+    parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema: {type: string}
+    delete:
+      tags: [Identity]
+      operationId: revokeTrustedDevice
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '200': {description: Device revoked}
+
+  /users:
+    get:
+      tags: [Identity]
+      operationId: listUsers
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Users, content: {application/json: {schema: {$ref: '#/components/schemas/CursorPage'}}}}
+    post:
+      tags: [Identity]
+      operationId: createUser
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject, display_name]
+              properties:
+                subject: {type: string, minLength: 1, maxLength: 255}
+                display_name: {type: string, minLength: 1, maxLength: 200}
+                email: {type: string, format: email}
+      responses:
+        '201': {description: User created, content: {application/json: {schema: {$ref: '#/components/schemas/User'}}}}
+
+  /users/{user_id}:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [Identity]
+      operationId: getUser
+      responses:
+        '200': {description: User, content: {application/json: {schema: {$ref: '#/components/schemas/User'}}}}
+    patch:
+      tags: [Identity]
+      operationId: updateUser
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      headers:
+        If-Match:
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name: {type: string, minLength: 1, maxLength: 200}
+                email: {type: string, format: email}
+                status: {type: string, enum: [active, suspended, locked]}
+      responses:
+        '200': {description: User updated, content: {application/json: {schema: {$ref: '#/components/schemas/User'}}}}
+
+  /users/{user_id}/activate:
+    post:
+      tags: [Identity]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, properties: {reason: {type: string, maxLength: 2000}}}}}}
+      responses:
+        '200': {description: User activated}
+
+  /users/{user_id}/suspend:
+    post:
+      tags: [Identity]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 10, maxLength: 2000}
+      responses:
+        '202': {description: Suspension and session revocation accepted}
+
+  /users/{user_id}/unlock:
+    post:
+      tags: [Identity]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '200': {description: Account unlocked}
+
+  /users/{user_id}/access:
+    get:
+      tags: [Identity]
+      operationId: getUserAccess
+      responses:
+        '200': {description: Effective roles, scopes, grants, and sessions}
+
+  /users/{user_id}/sessions:
+    get:
+      tags: [Identity]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Active sessions, content: {application/json: {schema: {$ref: '#/components/schemas/CursorPage'}}}}
+
+  /admin/roles:
+    get:
+      tags: [RBAC]
+      operationId: listRoles
+      responses:
+        '200': {description: Roles, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Role'}}}}}
+    post:
+      tags: [RBAC]
+      operationId: createRole
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, permissions]
+              properties:
+                name: {type: string, minLength: 1, maxLength: 100}
+                permissions: {type: array, items: {type: string}}
+                scope_ids: {type: array, items: {type: string}}
+      responses:
+        '201': {description: Role created, content: {application/json: {schema: {$ref: '#/components/schemas/Role'}}}}
+
+  /admin/roles/{role_id}:
+    parameters:
+      - name: role_id
+        in: path
+        required: true
+        schema: {type: string}
+    patch:
+      tags: [RBAC]
+      operationId: updateRole
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string}
+                permissions: {type: array, items: {type: string}}
+                scope_ids: {type: array, items: {type: string}}
+                expected_version: {type: integer, minimum: 0}
+      responses:
+        '200': {description: Role updated}
+
+  /admin/permissions:
+    get:
+      tags: [RBAC]
+      operationId: listPermissions
+      responses:
+        '200': {description: Available permission IDs}
+
+  /admin/roles/{role_id}/permissions:
+    put:
+      tags: [RBAC]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permission_ids]
+              properties:
+                permission_ids: {type: array, uniqueItems: true, items: {type: string}}
+      responses:
+        '200': {description: Permissions assigned}
+
+  /admin/users/{user_id}/roles:
+    get:
+      tags: [RBAC]
+      responses:
+        '200': {description: Assigned roles and effective scopes}
+    put:
+      tags: [RBAC]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_ids]
+              properties:
+                role_ids: {type: array, uniqueItems: true, items: {type: string}}
+      responses:
+        '200': {description: Roles assigned}
+
+  /admin/users/{user_id}/roles/{role_id}:
+    delete:
+      tags: [RBAC]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '200': {description: Role removed}
+
+  /assets:
+    get:
+      tags: [Assets]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Visible assets}
+    post:
+      tags: [Assets]
+      operationId: registerAsset
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name: {type: string, minLength: 1, maxLength: 200}
+                type: {type: string, enum: [linux_server, windows_server, network_device, firewall, database_server, cloud_infrastructure, virtualization_platform, kubernetes_infrastructure]}
+                address: {type: string, maxLength: 500}
+                zone: {type: string, maxLength: 100}
+      responses:
+        '201': {description: Asset registered, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}
+
+  /assets/{asset_id}:
+    parameters:
+      - name: asset_id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [Assets]
+      responses:
+        '200': {description: Asset details, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}
+    patch:
+      tags: [Assets]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string, minLength: 1, maxLength: 200}
+                address: {type: string, maxLength: 500}
+                zone: {type: string, maxLength: 100}
+                status: {type: string, enum: [active, disabled]}
+                expected_version: {type: integer, minimum: 0}
+      responses:
+        '200': {description: Asset updated}
+
+  /assets/{asset_id}/disable:
+    post:
+      tags: [Assets]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 10, maxLength: 2000}
+      responses:
+        '202': {description: Asset disable accepted}
+
+  /assets/{asset_id}/accounts:
+    get:
+      tags: [Assets, Accounts]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Privileged accounts}
+
+  /assets/{asset_id}/discovery:
+    post:
+      tags: [Assets, Discovery]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source: {type: string, enum: [linux_ssh, active_directory, database, network_device, cloud, virtualization]}
+      responses:
+        '202': {description: Discovery accepted}
+
+  /assets/{asset_id}/health:
+    get:
+      tags: [Assets]
+      responses:
+        '200': {description: Non-sensitive asset connectivity health}
+
+  /accounts:
+    get:
+      tags: [Accounts]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Privileged accounts}
+    post:
+      tags: [Accounts]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [asset_id, name, category]
+              properties:
+                asset_id: {type: string}
+                name: {type: string, minLength: 1, maxLength: 200}
+                category: {type: string, enum: [root, administrator, service_account, database_administrator, network_administrator, privileged_account]}
+                vault_secret_id: {type: string, nullable: true}
+      responses:
+        '201': {description: Account registered, content: {application/json: {schema: {$ref: '#/components/schemas/PrivilegedAccount'}}}}
+
+  /accounts/{account_id}:
+    parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [Accounts]
+      responses:
+        '200': {description: Account metadata, content: {application/json: {schema: {$ref: '#/components/schemas/PrivilegedAccount'}}}}
+    patch:
+      tags: [Accounts]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string, maxLength: 200}
+                vault_secret_id: {type: string, nullable: true}
+                status: {type: string, enum: [active, disabled]}
+                expected_version: {type: integer, minimum: 0}
+      responses:
+        '200': {description: Account updated}
+
+  /accounts/{account_id}/disable:
+    post:
+      tags: [Accounts]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 10, maxLength: 2000}
+      responses:
+        '202': {description: Account disable accepted}
+
+  /accounts/{account_id}/health:
+    get:
+      tags: [Accounts]
+      responses:
+        '200': {description: Account verification state}
+
+  /accounts/{account_id}/verify:
+    post:
+      tags: [Accounts, Vault]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '202': {description: Credential verification started}
+
+  /accounts/{account_id}/rotate:
+    post:
+      tags: [Accounts, Rotation]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                policy_id: {type: string}
+      responses:
+        '202': {description: Rotation started}
+
+  /accounts/{account_id}/rotation-history:
+    get:
+      tags: [Accounts, Rotation]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Rotation history}
+
+  /vault/secrets:
+    get:
+      tags: [Vault]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Secret metadata only}
+    post:
+      tags: [Vault]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name: {type: string, minLength: 1, maxLength: 200}
+                type: {type: string, enum: [password, ssh_private_key, api_token, database_credential, other]}
+                plaintext:
+                  type: string
+                  format: password
+                  writeOnly: true
+                  description: Secret plaintext is accepted only at vault ingress and never returned.
+      responses:
+        '201': {description: Secret metadata created}
+
+  /vault/secrets/{secret_id}:
+    parameters:
+      - name: secret_id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [Vault]
+      responses:
+        '200': {description: Secret metadata; plaintext never returned}
+    put:
+      tags: [Vault]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string, maxLength: 200}
+                plaintext: {type: string, format: password, writeOnly: true}
+                expected_version: {type: integer, minimum: 0}
+      responses:
+        '200': {description: Secret version created}
+
+  /vault/secrets/{secret_id}/rotate:
+    post:
+      tags: [Vault, Rotation]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '202': {description: Secret rotation started}
+
+  /vault/secrets/{secret_id}/verify:
+    post:
+      tags: [Vault]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '202': {description: Secret verification started}
+
+  /vault/secrets/{secret_id}/revoke:
+    post:
+      tags: [Vault]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 10, maxLength: 2000}
+      responses:
+        '200': {description: Secret revoked}
+
+  /vault/secrets/{secret_id}/versions:
+    get:
+      tags: [Vault]
+      responses:
+        '200': {description: Secret version metadata}
+
+  /requests:
+    get:
+      tags: [Requests]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}, {name: state, in: query, schema: {type: string, enum: [pending, approved, rejected, cancelled, expired]}}]
+      responses:
+        '200': {description: Visible requests}
+    post:
+      tags: [Requests]
+      operationId: submitAccessRequest
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [asset_id, target_account_id, requested_start_at, requested_end_at, justification]
+              properties:
+                asset_id: {type: string}
+                target_account_id: {type: string}
+                requested_start_at: {$ref: '#/components/schemas/Timestamp'}
+                requested_end_at: {$ref: '#/components/schemas/Timestamp'}
+                justification: {type: string, minLength: 10, maxLength: 2000}
+                ticket_ref: {type: string, maxLength: 200, nullable: true}
+      responses:
+        '201': {description: Request submitted, content: {application/json: {schema: {$ref: '#/components/schemas/AccessRequest'}}}}
+
+  /requests/{request_id}:
+    parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [Requests]
+      responses:
+        '200': {description: Request details, content: {application/json: {schema: {$ref: '#/components/schemas/AccessRequest'}}}}
+
+  /requests/{request_id}/revisions:
+    post:
+      tags: [Requests]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_revision_id]
+              properties:
+                expected_revision_id: {type: string}
+                requested_start_at: {$ref: '#/components/schemas/Timestamp'}
+                requested_end_at: {$ref: '#/components/schemas/Timestamp'}
+                justification: {type: string, maxLength: 2000}
+                ticket_ref: {type: string, maxLength: 200, nullable: true}
+      responses:
+        '201': {description: Revision submitted}
+
+  /requests/{request_id}/cancel:
+    post:
+      tags: [Requests]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: {type: string, maxLength: 2000}
+      responses:
+        '200': {description: Request cancelled}
+
+  /approvals:
+    get:
+      tags: [Approvals]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Pending approvals assigned to caller}
+
+  /approval-steps/{step_id}/decisions:
+    post:
+      tags: [Approvals]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_revision_id, decision]
+              properties:
+                expected_revision_id: {type: string}
+                decision: {type: string, enum: [approve, reject]}
+                reason: {type: string, maxLength: 2000}
+      responses:
+        '201': {description: Decision recorded; final approval may issue a grant}
+
+  /grants/{grant_id}:
+    get:
+      tags: [Grants]
+      parameters:
+        - name: grant_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: Grant details, content: {application/json: {schema: {$ref: '#/components/schemas/Grant'}}}}
+
+  /grants/{grant_id}/launches:
+    post:
+      tags: [Grants]
+      parameters:
+        - name: grant_id
+          in: path
+          required: true
+          schema: {type: string}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '201': {description: Single-use launch created}
+
+  /grants/{grant_id}/revoke:
+    post:
+      tags: [Grants]
+      parameters:
+        - name: grant_id
+          in: path
+          required: true
+          schema: {type: string}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 10, maxLength: 2000}
+      responses:
+        '202': {description: Revocation and session termination accepted}
+
+  /sessions:
+    get:
+      tags: [Sessions]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}, {name: state, in: query, schema: {type: string}}]
+      responses:
+        '200': {description: Visible sessions}
+
+  /sessions/{session_id}:
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [Sessions]
+      responses:
+        '200': {description: Session details, content: {application/json: {schema: {$ref: '#/components/schemas/Session'}}}}
+
+  /sessions/{session_id}/terminate:
+    post:
+      tags: [Sessions]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 10, maxLength: 2000}
+      responses:
+        '202': {description: Session termination accepted}
+
+  /sessions/{session_id}/events:
+    get:
+      tags: [Sessions, Audit]
+      responses:
+        '200': {description: Session lifecycle events}
+
+  /sessions/{session_id}/activity:
+    get:
+      tags: [Sessions]
+      responses:
+        '200': {description: Scoped session activity summary}
+
+  /sessions/{session_id}/risk:
+    get:
+      tags: [Sessions]
+      responses:
+        '200': {description: Current risk assessment}
+
+  /sessions/{session_id}/pause:
+    post:
+      tags: [Sessions]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '202': {description: Session pause accepted}
+
+  /sessions/{session_id}/resume:
+    post:
+      tags: [Sessions]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '202': {description: Session resume accepted}
+
+  /sessions/{session_id}/monitoring:
+    post:
+      tags: [Sessions]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state]
+              properties:
+                state: {type: string, enum: [enabled, paused, disabled]}
+      responses:
+        '200': {description: Monitoring state updated}
+
+  /sessions/{session_id}/recording:
+    get:
+      tags: [Sessions]
+      responses:
+        '200': {description: Recording status and coverage}
+
+  /sessions/{session_id}/commands:
+    get:
+      tags: [Sessions, Audit]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Authorized command activity}
+
+  /recordings/{recording_id}:
+    get:
+      tags: [Audit]
+      responses:
+        '200': {description: Recording metadata}
+
+  /recordings/{recording_id}/playback-sessions:
+    post:
+      tags: [Audit]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [step_up_token]
+              properties:
+                step_up_token: {type: string}
+      responses:
+        '201': {description: Short-lived playback authorized}
+
+  /recordings/{recording_id}/exports:
+    post:
+      tags: [Audit]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 10, maxLength: 2000}
+      responses:
+        '202': {description: Evidence export accepted}
+
+  /recording-exports/{export_id}:
+    get:
+      tags: [Audit]
+      responses:
+        '200': {description: Export status and expiring download reference}
+
+  /emergency-requests:
+    get:
+      tags: [Emergency]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Visible emergency requests}
+    post:
+      tags: [Emergency]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [asset_id, target_account_id, justification, requested_end_at, step_up_token]
+              properties:
+                asset_id: {type: string}
+                target_account_id: {type: string}
+                justification: {type: string, minLength: 10, maxLength: 2000}
+                requested_end_at: {$ref: '#/components/schemas/Timestamp'}
+                step_up_token: {type: string}
+      responses:
+        '201': {description: Emergency request created}
+
+  /emergency-requests/{emergency_id}:
+    get:
+      tags: [Emergency]
+      responses:
+        '200': {description: Emergency request details}
+
+  /emergency-requests/{emergency_id}/approve:
+    post:
+      tags: [Emergency]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, reason]
+              properties:
+                decision: {type: string, enum: [approve, reject]}
+                reason: {type: string, minLength: 10, maxLength: 2000}
+      responses:
+        '201': {description: Emergency decision recorded}
+
+  /emergency-requests/{emergency_id}/activate:
+    post:
+      tags: [Emergency]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [step_up_token]
+              properties:
+                step_up_token: {type: string}
+      responses:
+        '200': {description: Emergency grant activated}
+
+  /emergency-requests/{emergency_id}/revoke:
+    post:
+      tags: [Emergency]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 10, maxLength: 2000}
+      responses:
+        '202': {description: Emergency access revoked}
+
+  /emergency-requests/{emergency_id}/review:
+    get:
+      tags: [Emergency]
+      responses:
+        '200': {description: Post-access review evidence}
+
+  /rotation/jobs:
+    get:
+      tags: [Rotation]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Rotation jobs}
+    post:
+      tags: [Rotation]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_id]
+              properties:
+                account_id: {type: string}
+                policy_id: {type: string}
+      responses:
+        '201': {description: Rotation job created}
+
+  /rotation/jobs/{job_id}:
+    get:
+      tags: [Rotation]
+      responses:
+        '200': {description: Rotation job details and reconciliation state}
+
+  /rotation/jobs/{job_id}/cancel:
+    post:
+      tags: [Rotation]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: {type: string, maxLength: 2000}
+      responses:
+        '202': {description: Rotation cancellation accepted}
+
+  /rotation/policies:
+    get:
+      tags: [Rotation]
+      responses:
+        '200': {description: Rotation policies}
+    post:
+      tags: [Rotation]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, interval_days]
+              properties:
+                name: {type: string, maxLength: 200}
+                interval_days: {type: integer, minimum: 1, maximum: 3650}
+                require_verification: {type: boolean, default: true}
+      responses:
+        '201': {description: Rotation policy created}
+
+  /rotation/policies/{policy_id}:
+    patch:
+      tags: [Rotation]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string, maxLength: 200}
+                interval_days: {type: integer, minimum: 1, maximum: 3650}
+                require_verification: {type: boolean}
+                expected_version: {type: integer, minimum: 0}
+      responses:
+        '200': {description: Rotation policy updated}
+
+  /discovery/jobs:
+    get:
+      tags: [Discovery]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Discovery jobs}
+    post:
+      tags: [Discovery]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope_ids, sources]
+              properties:
+                scope_ids: {type: array, minItems: 1, items: {type: string}}
+                sources: {type: array, minItems: 1, items: {type: string, enum: [linux_ssh, active_directory, database, network_device, cloud, virtualization]}}
+      responses:
+        '202': {description: Discovery started}
+
+  /discovery/jobs/{job_id}:
+    get:
+      tags: [Discovery]
+      responses:
+        '200': {description: Discovery job status}
+
+  /discovery/results:
+    get:
+      tags: [Discovery]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Discovered account findings}
+
+  /discovery/results/{result_id}/adopt:
+    post:
+      tags: [Discovery]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [asset_id, category]
+              properties:
+                asset_id: {type: string}
+                category: {type: string, enum: [root, administrator, service_account, database_administrator, network_administrator, privileged_account]}
+      responses:
+        '201': {description: Finding adopted as managed account}
+
+  /discovery/results/{result_id}/ignore:
+    post:
+      tags: [Discovery]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 10, maxLength: 2000}
+      responses:
+        '200': {description: Finding ignored}
+
+  /integrations:
+    get:
+      tags: [Integrations]
+      responses:
+        '200': {description: Configured integrations}
+    post:
+      tags: [Integrations]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name: {type: string, maxLength: 200}
+                type: {type: string, enum: [ldap, entra_id, siem, ticketing, smtp, syslog, webhook, cloud, kubernetes, vault, hsm]}
+                configuration: {type: object, additionalProperties: true}
+      responses:
+        '201': {description: Integration registered}
+
+  /integrations/{integration_id}:
+    get:
+      tags: [Integrations]
+      responses:
+        '200': {description: Safe integration metadata}
+    patch:
+      tags: [Integrations]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                configuration: {type: object, additionalProperties: true}
+                status: {type: string, enum: [enabled, disabled]}
+                expected_version: {type: integer, minimum: 0}
+      responses:
+        '200': {description: Integration updated}
+
+  /integrations/{integration_id}/test:
+    post:
+      tags: [Integrations]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '202': {description: Connectivity test started}
+
+  /integrations/{integration_id}/sync:
+    post:
+      tags: [Integrations]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '202': {description: Synchronization started}
+
+  /integrations/{integration_id}/disable:
+    post:
+      tags: [Integrations]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '200': {description: Integration disabled}
+
+  /integrations/{integration_id}/logs:
+    get:
+      tags: [Integrations]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Integration logs}
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Caller notifications}
+
+  /notifications/{notification_id}/read:
+    post:
+      tags: [Notifications]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '200': {description: Notification marked read}
+
+  /notifications/read-all:
+    post:
+      tags: [Notifications]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '200': {description: Notifications marked read}
+
+  /admin/notification-channels:
+    get:
+      tags: [Notifications, Administration]
+      responses:
+        '200': {description: Notification channels}
+    post:
+      tags: [Notifications, Administration]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name: {type: string, maxLength: 200}
+                type: {type: string, enum: [email, smtp, webhook, syslog]}
+                configuration: {type: object, additionalProperties: true}
+      responses:
+        '201': {description: Channel configured}
+
+  /admin/webhooks:
+    get:
+      tags: [Notifications, Administration]
+      responses:
+        '200': {description: Registered webhooks}
+    post:
+      tags: [Notifications, Administration]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, event_types]
+              properties:
+                url: {type: string, format: uri}
+                event_types: {type: array, minItems: 1, items: {type: string}}
+                secret: {type: string, format: password, writeOnly: true}
+      responses:
+        '201': {description: Webhook registered}
+
+  /admin/webhooks/{webhook_id}:
+    patch:
+      tags: [Notifications, Administration]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url: {type: string, format: uri}
+                event_types: {type: array, items: {type: string}}
+                status: {type: string, enum: [enabled, disabled]}
+                secret: {type: string, format: password, writeOnly: true}
+      responses:
+        '200': {description: Webhook updated}
+
+  /admin/webhooks/{webhook_id}/test:
+    post:
+      tags: [Notifications, Administration]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '202': {description: Webhook test queued}
+
+  /admin/webhooks/{webhook_id}/deliveries:
+    get:
+      tags: [Notifications, Administration]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Delivery history}
+
+  /reports:
+    get:
+      tags: [Reports]
+      responses:
+        '200': {description: Available reports}
+
+  /reports/generate:
+    post:
+      tags: [Reports]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [report_type]
+              properties:
+                report_type: {type: string, enum: [privileged_user_activity, approval_history, active_sessions, rotation_compliance, inactive_accounts, emergency_access, failed_logins, recording_coverage, policy_violations]}
+                from: {$ref: '#/components/schemas/Timestamp'}
+                to: {$ref: '#/components/schemas/Timestamp'}
+                scope_ids: {type: array, items: {type: string}}
+      responses:
+        '202': {description: Report generation started}
+
+  /reports/{report_id}:
+    get:
+      tags: [Reports]
+      responses:
+        '200': {description: Report status}
+
+  /reports/{report_id}/download:
+    get:
+      tags: [Reports]
+      responses:
+        '200': {description: Expiring report download reference}
+
+  /audit-events:
+    get:
+      tags: [Audit]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Permitted audit events}
+
+  /audit-events/{event_id}:
+    get:
+      tags: [Audit]
+      responses:
+        '200': {description: Audit event details}
+
+  /audit-events/verify:
+    get:
+      tags: [Audit]
+      parameters:
+        - name: from_event_id
+          in: query
+          schema: {type: string}
+        - name: to_event_id
+          in: query
+          schema: {type: string}
+      responses:
+        '200': {description: Audit integrity verification result}
+
+  /compliance/summary:
+    get:
+      tags: [Reports]
+      responses:
+        '200': {description: Compliance summary}
+
+  /compliance/access-review:
+    get:
+      tags: [Reports]
+      responses:
+        '200': {description: Current access review findings}
+
+  /compliance/access-reviews:
+    post:
+      tags: [Reports]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope_ids]
+              properties:
+                scope_ids: {type: array, minItems: 1, items: {type: string}}
+                due_at: {$ref: '#/components/schemas/Timestamp'}
+      responses:
+        '201': {description: Access review started}
+
+  /compliance/access-reviews/{review_id}/decisions:
+    post:
+      tags: [Reports]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject_id, decision]
+              properties:
+                subject_id: {type: string}
+                decision: {type: string, enum: [retain, revoke, escalate]}
+                reason: {type: string, maxLength: 2000}
+      responses:
+        '201': {description: Access review decision recorded}
+
+  /health:
+    get:
+      tags: [Health]
+      security: []
+      responses:
+        '200': {description: Safe application health summary}
+        '503': {description: Service unhealthy}
+
+  /health/ready:
+    get:
+      tags: [Health]
+      security: []
+      responses:
+        '200': {description: Ready}
+        '503': {description: Not ready}
+
+  /health/live:
+    get:
+      tags: [Health]
+      security: []
+      responses:
+        '200': {description: Live}
+
+  /admin/system/info:
+    get:
+      tags: [Administration]
+      responses:
+        '200': {description: Safe system information}
+
+  /admin/system/config:
+    get:
+      tags: [Administration]
+      responses:
+        '200': {description: Safe configuration metadata}
+    patch:
+      tags: [Administration]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [settings]
+              properties:
+                settings:
+                  type: object
+                  additionalProperties: true
+                expected_version: {type: integer, minimum: 0}
+      responses:
+        '200': {description: Allowed configuration updated}
+
+  /admin/system/services:
+    get:
+      tags: [Administration]
+      responses:
+        '200': {description: Service status}
+
+  /admin/system/jobs:
+    get:
+      tags: [Administration]
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Background job status}
+
+  /admin/system/storage:
+    get:
+      tags: [Administration]
+      responses:
+        '200': {description: Storage utilization}
+
+  /admin/system/metrics:
+    get:
+      tags: [Administration]
+      responses:
+        '200': {description: Permitted operational metrics}
+
+  /admin/change-proposals:
+    post:
+      tags: [Administration]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resource_type, resource_id, expected_version, change_payload, reason]
+              properties:
+                resource_type: {type: string, enum: [asset, role, policy, account]}
+                resource_id: {type: string}
+                expected_version: {type: integer, minimum: 0}
+                change_payload: {type: object, additionalProperties: true}
+                reason: {type: string, minLength: 10, maxLength: 2000}
+      responses:
+        '201': {description: Scoped change proposal submitted}
+
+  /admin/change-proposals/{proposal_id}:
+    get:
+      tags: [Administration]
+      responses:
+        '200': {description: Change proposal details}
+
+  /admin/change-proposals/{proposal_id}/decisions:
+    post:
+      tags: [Administration]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, expected_version]
+              properties:
+                decision: {type: string, enum: [apply, reject]}
+                expected_version: {type: integer, minimum: 0}
+                reason: {type: string, maxLength: 2000}
+      responses:
+        '201': {description: Proposal independently reviewed}
+
+  /admin/gateways/register:
+    post:
+      tags: [Administration, Internal Gateway]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, zone]
+              properties:
+                name: {type: string, maxLength: 200}
+                zone: {type: string, maxLength: 100}
+      responses:
+        '201': {description: Gateway enrollment created}
+
+  /admin/gateways:
+    get:
+      tags: [Administration, Internal Gateway]
+      responses:
+        '200': {description: Gateway inventory}
+
+  /admin/gateways/{gateway_id}/health:
+    get:
+      tags: [Administration, Internal Gateway]
+      responses:
+        '200': {description: Gateway health}
+
+  /admin/gateways/{gateway_id}/drain:
+    post:
+      tags: [Administration, Internal Gateway]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '202': {description: Gateway drain accepted}
+
+  /admin/gateways/{gateway_id}/revoke:
+    post:
+      tags: [Administration, Internal Gateway]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 10, maxLength: 2000}
+      responses:
+        '202': {description: Gateway identity revoked}
+
+  /internal/v1/credentials/leases:
+    post:
+      tags: [Vault, Internal Gateway]
+      security:
+        - GatewayIdentity: []
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/XRequestId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id, grant_id, gateway_id, secret_id]
+              properties:
+                session_id: {type: string}
+                grant_id: {type: string}
+                gateway_id: {type: string}
+                secret_id: {type: string}
+                lease_deadline: {$ref: '#/components/schemas/Timestamp'}
+      responses:
+        '201': {description: Short-lived credential lease issued}
+
+  /internal/v1/credentials/leases/{lease_id}/revoke:
+    post:
+      tags: [Vault, Internal Gateway]
+      security:
+        - GatewayIdentity: []
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '200': {description: Credential lease revoked}
+
+  /internal/v1/credentials/leases/{lease_id}/acknowledge:
+    post:
+      tags: [Vault, Internal Gateway]
+      security:
+        - GatewayIdentity: []
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delivered_at]
+              properties:
+                delivered_at: {$ref: '#/components/schemas/Timestamp'}
+      responses:
+        '200': {description: Credential delivery acknowledged}
+
+  /internal/v1/launches/consume:
+    post:
+      tags: [Grants, Internal Gateway]
+      security:
+        - GatewayIdentity: []
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/XRequestId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [launch_id, gateway_id, requester_binding]
+              properties:
+                launch_id: {type: string}
+                gateway_id: {type: string}
+                requester_binding: {type: string}
+      responses:
+        '201': {description: Launch consumed and session created}
+
+  /internal/v1/sessions/{session_id}/renew:
+    post:
+      tags: [Sessions, Internal Gateway]
+      security:
+        - GatewayIdentity: []
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gateway_id, observed_at]
+              properties:
+                gateway_id: {type: string}
+                observed_at: {$ref: '#/components/schemas/Timestamp'}
+      responses:
+        '200': {description: Renewal deadline returned}
+
+  /internal/v1/sessions/{session_id}/events:
+    post:
+      tags: [Sessions, Internal Gateway, Audit]
+      security:
+        - GatewayIdentity: []
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_event_id, sequence, state, occurred_at]
+              properties:
+                source_event_id: {type: string}
+                sequence: {type: integer, minimum: 1}
+                state: {type: string, enum: [requested, active, paused, terminated, ended, expired]}
+                reason_code: {type: string, nullable: true}
+                occurred_at: {$ref: '#/components/schemas/Timestamp'}
+      responses:
+        '202': {description: Gateway evidence accepted and deduplicated}
+
+  /internal/v1/gateways/register:
+    post:
+      tags: [Administration, Internal Gateway]
+      security:
+        - GatewayIdentity: []
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gateway_id, zone]
+              properties:
+                gateway_id: {type: string}
+                zone: {type: string}
+                certificate_fingerprint: {type: string}
+      responses:
+        '201': {description: Gateway enrolled}
+
+  /internal/v1/gateways/heartbeat:
+    post:
+      tags: [Administration, Internal Gateway]
+      security:
+        - GatewayIdentity: []
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gateway_id, observed_at, state]
+              properties:
+                gateway_id: {type: string}
+                observed_at: {$ref: '#/components/schemas/Timestamp'}
+                state: {type: string, enum: [healthy, degraded, unavailable]}
+      responses:
+        '200': {description: Heartbeat accepted}
+
+  /internal/v1/gateways:
+    get:
+      tags: [Administration, Internal Gateway]
+      security:
+        - GatewayIdentity: []
+      responses:
+        '200': {description: Gateway inventory}
+
+  /internal/v1/gateways/{gateway_id}/health:
+    get:
+      tags: [Administration, Internal Gateway]
+      security:
+        - GatewayIdentity: []
+      responses:
+        '200': {description: Gateway health}
+
+  /internal/v1/gateways/{gateway_id}/drain:
+    post:
+      tags: [Administration, Internal Gateway]
+      security:
+        - GatewayIdentity: []
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '202': {description: Gateway drain accepted}
+
+  /internal/v1/gateways/{gateway_id}/revoke:
+    post:
+      tags: [Administration, Internal Gateway]
+      security:
+        - GatewayIdentity: []
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses:
+        '202': {description: Gateway identity revoked}

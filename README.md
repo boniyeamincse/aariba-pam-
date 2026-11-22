@@ -8,26 +8,27 @@ This repository contains the product and engineering baseline, a Python control 
 
 | Step | Document | What it defines |
 | --- | --- | --- |
-| 00 | [Vision](docs/00-VISION.md) | Product outcome, audience, and boundaries |
-| 01 | [Software idea](docs/01-SOFTWARE-IDEA.md) | Original product foundation and module overview |
-| 02 | [Problem statement](docs/02-PROBLEM-STATEMENT.md) | Current risk hypotheses and discovery evidence |
-| 03 | [Business requirements](docs/03-BUSINESS-REQUIREMENTS.md) | Outcomes and sponsor acceptance |
-| 04 | [Functional requirements](docs/04-FUNCTIONAL-REQUIREMENTS.md) | Required system behavior |
-| 05 | [Non-functional requirements](docs/05-NON-FUNCTIONAL-REQUIREMENTS.md) | Measurable service and pilot criteria |
-| 06 | [Feature specification](docs/06-FEATURE-SPECIFICATION.md) | Pilot feature behavior and acceptance scenarios |
-| 07 | [Roles and permissions](docs/07-USER-ROLES-PERMISSIONS.md) | Scope and separation of duties |
-| 08 | [User workflow](docs/08-USER-WORKFLOW.md) | Request, grant, session, and emergency workflows |
-| 09 | [System architecture](docs/09-SYSTEM-ARCHITECTURE.md) | Components, traffic paths, and failure behavior |
-| 10 | [Database design](docs/10-DATABASE-DESIGN.md) | Entities, constraints, and consistency |
-| 11 | [API specification](docs/11-API-SPECIFICATION.md) | Proposed v1 interfaces and errors |
-| 12 | [UI/UX guidelines](docs/12-UI-UX-GUIDELINES.md) | Portal navigation, interaction, and state |
-| 13 | [Security requirements](docs/13-SECURITY-REQUIREMENTS.md) | Threats, controls, and verification |
+| 01 | [Project overview](docs/01-PROJECT-OVERVIEW.md) | Vision, problem statement, boundaries, and pilot scope |
+| 02 | [Product requirements](docs/02-PRODUCT-REQUIREMENTS.md) | Business (BR), functional (FR), and non-functional (NFR) requirements |
+| 03 | [System architecture](docs/03-SYSTEM-ARCHITECTURE.md) | System components, network topologies, and trust boundaries |
+| 04 | [API specification](docs/04-API-SPECIFICATION.md) | REST API contract, error handling, and authorization endpoints |
+| 05 | [Database schema](docs/05-DATABASE-SCHEMA.md) | Relational data models, constraints, and audit persistence |
+| 06 | [Identity and access management](docs/06-IDENTITY-AND-ACCESS-MANAGEMENT.md) | OIDC federation, phishing-resistant MFA, and account disablement propagation |
+| 07 | [User roles and permissions](docs/07-USER-ROLES-AND-PERMISSIONS.md) | Hybrid RBAC+ABAC matrix and anti-superuser custodian boundary isolation |
+| 08 | [Authorization policy engine](docs/08-AUTHORIZATION-POLICY-ENGINE.md) | Canonical permissions, decision flow, explicit deny, and evaluation pipeline |
+| 09 | [Resource scope management](docs/09-RESOURCE-SCOPE-MANAGEMENT.md) | Hierarchical scope tree, containment, and inheritance rules |
+| 10 | [Separation of duties](docs/10-SEPARATION-OF-DUTIES.md) | Conflict rules, four-eyes principle, and controlled exception workflows |
+| 11 | [Approval and delegation](docs/11-APPROVAL-AND-DELEGATION.md) | Workflow routing, immutable revisions, and 7 delegation rules |
+| 12 | [Credential vault design](docs/12-CREDENTIAL-VAULT-DESIGN.md) | Ephemeral SSH certificate authority, key rollover, and vault secret injection |
+| 13 | [Security requirements](docs/13-SECURITY-REQUIREMENTS.md) | Threat modeling, 10 core controls, and verification test mapping |
 | 13A | [Authentication and authorization](docs/authentication-authorization.md) | Identity sources, MFA, RBAC, resource scope, revocation, and service authorization |
+| 11A | [OpenAPI 3.1 specification](docs/openapi.yaml) | Machine-readable v1.1 API routes, schemas, security, and error contracts |
 | 14 | [Technology stack](docs/14-TECHNOLOGY-STACK.md) | Proposed components and selection criteria |
-| 15 | [Docker strategy](docs/15-DOCKER-STRATEGY.md) | Local, test, and pilot packaging and isolation |
-| 16 | [Testing strategy](docs/16-TESTING-STRATEGY.md) | Test layers, pilot checks, and evidence |
-| 17 | [Development roadmap](docs/17-DEVELOPMENT-ROADMAP.md) | Delivery sequence and exit criteria |
-| 18 | [Future enhancements](docs/18-FUTURE-ENHANCEMENTS.md) | Deferred capabilities and prerequisites |
+| 15 | [Session gateway design](docs/15-SESSION-GATEWAY-DESIGN.md) | Go SSH gateway proxy, host pinning, and bounded local lease enforcement |
+| 16 | [Audit and evidence management](docs/16-AUDIT-AND-EVIDENCE-MANAGEMENT.md) | Transactional outbox, terminal recordings, and WORM evidence custody |
+| 17 | [Integration architecture](docs/17-INTEGRATION-ARCHITECTURE.md) | Enterprise IdP, Wazuh SIEM, Ariba SOC, and ITSM adapters |
+| 18 | [Workflow state machine](docs/18-WORKFLOW-STATE-MACHINE.md) | Object lifecycles, state transition tables, and invariants |
+| 19 | [Development roadmap](docs/19-DEVELOPMENT-ROADMAP.md) | Milestone phases, task dependencies, and backlog |
 
 ## Start Phase 0
 

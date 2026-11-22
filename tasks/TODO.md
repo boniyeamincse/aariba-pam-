@@ -2,9 +2,9 @@
 
 Pick the first unblocked task in the current phase. A dependency is satisfied when its evidence is in [COMPLETED](COMPLETED.md). Assign an owner and move the row to [IN-PROGRESS](IN-PROGRESS.md) when work starts. Later phases are planned backlog. Start them after the relevant phase exit and approvals.
 
-For an implementation task, read the linked requirement or specification, make the smallest change that satisfies the completion check, and run the relevant tests. Record the actual result in the [test result format](../docs/16-TESTING-STRATEGY.md#execution-and-result-record). Commit the reviewed change and documentation together and link the commit and test evidence in the completed row.
+For an implementation task, read the linked requirement or specification, make the smallest change that satisfies the completion check, and run the relevant tests. Commit the reviewed change and documentation together and link the commit and test evidence in the completed row.
 
-The identifiers below refer to [functional requirements](../docs/04-FUNCTIONAL-REQUIREMENTS.md), [non-functional requirements](../docs/05-NON-FUNCTIONAL-REQUIREMENTS.md), [pilot test cases](../docs/16-TESTING-STRATEGY.md#pilot-test-catalog), and [architecture decisions](../decisions/architecture-decisions.md).
+The identifiers below refer to [product requirements](../docs/02-PRODUCT-REQUIREMENTS.md), [functional requirements](../docs/02-PRODUCT-REQUIREMENTS.md#2-functional-requirements-fr), and [architecture decisions](../decisions/architecture-decisions.md).
 
 ## Phase 0 · Discovery and design
 
@@ -20,13 +20,13 @@ The identifiers below refer to [functional requirements](../docs/04-FUNCTIONAL-R
 
 ## Phase 1 · Core platform
 
-Detailed design lives in the [control plane module](../specifications/modules/control-plane.md), [database design](../docs/10-DATABASE-DESIGN.md), and [Docker strategy](../docs/15-DOCKER-STRATEGY.md).
+Detailed design lives in the [control plane module](../specifications/modules/control-plane.md), [database schema](../docs/05-DATABASE-SCHEMA.md), and [system architecture](../docs/03-SYSTEM-ARCHITECTURE.md).
 
 Phase 1 tasks and their implementation evidence are listed in [COMPLETED.md](COMPLETED.md).
 
 ## Phase 2 · Requests, approvals, and grants
 
-Use the [access workflow](../docs/08-USER-WORKFLOW.md), [API contracts](../docs/11-API-SPECIFICATION.md), and [interaction guidelines](../docs/12-UI-UX-GUIDELINES.md).
+Use the [workflow state machine](../docs/17-WORKFLOW-STATE-MACHINE.md) and [API specification](../docs/04-API-SPECIFICATION.md).
 
 All Phase 2 tasks (P2-01 through P2-09) and their implementation evidence have been completed and recorded in [COMPLETED.md](COMPLETED.md).
 

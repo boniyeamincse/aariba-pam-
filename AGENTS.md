@@ -12,4 +12,4 @@
 - Enforce resource-scoped authorization server-side. Preserve default deny, separation of duties, and traceability from request to session.
 - Test rejected paths, retries, concurrency, and dependency failures when touching approvals, grants, session launch, revocation, or evidence handling.
 - Use synthetic identities, targets, credentials, and recordings in the lab. Keep secrets and production evidence out of source control.
-- Use maintained protocol and cryptography libraries. Follow the [security requirements](docs/13-SECURITY-REQUIREMENTS.md) and [testing strategy](docs/16-TESTING-STRATEGY.md) for implementation changes.
+- Use maintained protocol and cryptography libraries. Follow the [security requirements](docs/13-SECURITY-REQUIREMENTS.md) and [product requirements](docs/02-PRODUCT-REQUIREMENTS.md) for implementation changes.

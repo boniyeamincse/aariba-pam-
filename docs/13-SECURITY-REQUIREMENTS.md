@@ -1,33 +1,51 @@
-# Security requirements
+# 13 · Security Requirements: Ariba PAM
 
-> Proposed security baseline · 2026-11-22
+> Threat Matrix, Core Controls & Verification Mapping · 2026-11-22
 
-## Threats and controls
+Security requirements define non-negotiable architectural invariants and controls enforced across all Ariba PAM components.
 
-| ID | Threat | Required control | Verification |
-| --- | --- | --- | --- |
-| SEC-01 | Account takeover or delayed offboarding | Use the pilot IdP, enforce phishing-resistant MFA, verify current account state, and propagate disablement | T-01 |
-| SEC-02 | Unauthorized change or approval | Deny by default, check resource scope, block self-approval including delegation, and require independent review of sensitive admin changes | T-02 |
-| SEC-03 | Direct or misdirected privileged access | Restrict target network paths, verify host identity, scope gateway service identities, and deny unapproved SSH channels | T-03 |
-| SEC-04 | Launch replay or session surviving authorization | Use one-time launches with atomic consumption, gateway leases, and local expiry. Apply revocation across all associated sessions | T-04, T-05 |
-| SEC-05 | Key theft or reusable credential exposure | Keep CA custody isolated. Restrict issuance to approved identities and accounts, audit use, and test rollover. Require vault safeguards for stored-credential targets | T-06 |
-| SEC-06 | Evidence tampering, recording loss, or excess disclosure | Separate custody, restrict reads and exports, verify integrity, and enforce recording failure behavior and retention | T-07, T-08 |
-| SEC-07 | Platform outage or emergency access misuse | Test restore and break-glass, track custody, review every use, and clean up emergency access | T-09 |
-| SEC-08 | Dependency compromise or unsafe release | Inventory dependencies, scan source and images, review critical changes, and promote verified immutable artifacts | T-10 |
+---
 
-## Evidence and privacy
+## 1. Core Security Invariants (10 Mandatory Rules)
 
-Record stable event IDs, actor, action, target, outcome, timestamps, and relevant request, grant, or session identifiers. Keep raw terminal data in the recording store. Limit forwarding to approved security metadata. Approve recording notice, retention, authorized export, legal holds where applicable, and handling of personal or sensitive content before live capture.
+| Control | Invariant Requirement | Enforcement Layer |
+| :--- | :--- | :--- |
+| **1. Default Deny** | Any action or resource access without an explicit matching permission grant is denied immediately. | Authorization Policy Engine |
+| **2. Least Privilege** | Users and service accounts operate with the absolute minimum set of permissions necessary for the specific task window. | Role & Scope Engine |
+| **3. Scope Enforcement** | Every database read, API call, and gateway connection verifies the caller's resource scope. Unscoped resources return HTTP 404. | `ScopeChecker` / API routers |
+| **4. Explicit Deny** | Explicit deny rules override any allow permissions across policies and role assignments. | Policy Engine |
+| **5. Approval Independence** | An actor cannot approve their own requests, revisions, or administrative proposals (including via delegation). | Workflow State Machine / SoD |
+| **6. Time-Bound Access** | Standing access is prohibited. All role assignments, grants, leases, and launch tokens expire automatically without manual intervention. | Lease Watcher / DB Timers |
+| **7. MFA Enforcement** | Privileged operations and administrative changes require proof of hardware-backed, phishing-resistant MFA (FIDO2/WebAuthn). | Identity Service (`amr` check) |
+| **8. Session Revocation** | Role suspension, grant revocation, or IdP disablement immediately invalidates active sessions, terminates gateway channels, and closes target sockets. | Outbox & Lease Reconciler |
+| **9. Audit Logging** | Every administrative decision, authentication attempt, permission evaluation, and terminal keystroke is immutably recorded. | Transactional Outbox & WORM |
+| **10. Cache Invalidation** | Role, permission, or scope changes immediately purge authorization caches, forcing fresh evaluation on subsequent requests. | Cache Manager / Engine |
 
-## Recovery and incident handling
+---
 
-Document containment for a compromised IdP, gateway, signer, or vault. Include service identity revocation, target trust recovery, protection of existing evidence, and criteria to reopen access. Assign operators for incident, evidence, and platform recovery. Review boundaries and failure cases before approving the pilot.
+## 2. Threat Matrix & Pilot Verification Mapping
 
-## Pre-pilot review
+| Threat ID | Threat Description | Mitigating Control | Pilot Check |
+| :--- | :--- | :--- | :--- |
+| **SEC-01** | **Account Takeover / Stale Offboarding** | Federate through enterprise IdP, require FIDO2 MFA, consume disablement webhook, and propagate revocation within 60s. | **T-01** |
+| **SEC-02** | **Self-Approval & Collusion** | Enforce SoD rules, separation of duties, four-eyes review on policy changes, and immutable request revision tracking. | **T-02** |
+| **SEC-03** | **Network Bypass & Untrusted Targets** | Deny direct SSH workstation traffic at firewall. Gateway verifies target host key fingerprint before authenticating. | **T-03** |
+| **SEC-04** | **Launch Token Replay / Stealing** | Ephemeral, single-use launch tokens with 60-second expiry. Consumed atomically in a database lock. Raw tokens never logged. | **T-04** |
+| **SEC-05** | **Partitioned Gateway Access Extension** | Local gateway lease watcher independently terminates SSH sessions upon lease expiry during network partitions. | **T-05** |
+| **SEC-06** | **Credential Extraction / CA Compromise** | Ephemeral SSH certificate signing in isolated enclave. Gateway never reads CA private keys. Automatic rotation. | **T-06** |
+| **SEC-07** | **Evidence Tampering & Blind Spots** | Fail-closed PTY recording buffer. Storage outage pauses or terminates session. WORM compliance on S3 bucket. | **T-07**, **T-08** |
+| **SEC-08** | **Privilege Escalation via Administrator** | Anti-superuser partitioning. Evidence, Signing, and Emergency Custodians isolated from standard PAM Admins. | **T-02**, **T-09** |
 
-- Security and infrastructure review the gateway, target trust, and signer boundaries using the approved pilot asset list.
-- IAM verifies the assurance criteria, account disablement signal, and identity recovery path with T-01.
-- Evidence and privacy owners approve notice, retention, review rights, and incident escalation before live capture.
-- Platform and security review restore and emergency drill results. Escalate unmitigated risks for a documented decision before opening access.
+---
 
-See [test catalog](16-TESTING-STRATEGY.md), [NIST SP 800-207](https://csrc.nist.gov/pubs/sp/800/207/final), and [NIST SP 800-63B-4](https://pages.nist.gov/800-63-4/sp800-63b.html).
+## 3. Dynamic Revalidation on Role Revocation
+
+A critical vulnerability in legacy PAM systems is that revoking a user's role stops *future* logins but leaves existing active SSH sessions and issued grants intact.
+
+In Ariba PAM, invoking `/api/v1/admin/role-assignments/{id}/revoke`:
+1. Marks the assignment as `revoked`.
+2. Automatically identifies all active `access_grants` issued to the user under that role and scope.
+3. Transitions those grants to `revoked`.
+4. Marks all running `access_sessions` as `terminating`.
+5. Emits an audit outbox event.
+6. The next gateway lease renewal cycle (within 30 seconds) rejects renewal, terminating the active terminal session immediately.
