@@ -48,6 +48,7 @@
 | P5-09 | Verify capacity, client compatibility, and deployment rollback | [gateway/gateway_test.go](../gateway/gateway_test.go), [tests/test_capacity_and_performance.py](../tests/test_capacity_and_performance.py), [tests/test_migration_rollback.py](../tests/test_migration_rollback.py) |
 | P5-10 | Review evidence and approve the limited production pilot | [decisions/architecture-decisions.md](../decisions/architecture-decisions.md) (ADR-011), [tests/test_pilot_readiness.py](../tests/test_pilot_readiness.py) |
 | P6-01 | Select an RDP implementation and Windows lab matrix | [decisions/architecture-decisions.md](../decisions/architecture-decisions.md) (ADR-012), [docs/14-SESSION-GATEWAY-DESIGN.md](../docs/14-SESSION-GATEWAY-DESIGN.md), [src/ariba_pam/services/rdp.py](../src/ariba_pam/services/rdp.py), [gateway/client.go](../gateway/client.go), [tests/test_rdp_gateway.py](../tests/test_rdp_gateway.py) |
+| P6-02 | Validate RDP authorization and evidence in the lab | [gateway/rdp.go](../gateway/rdp.go), [gateway/rdp_test.go](../gateway/rdp_test.go), [tests/test_rdp_session_lifecycle.py](../tests/test_rdp_session_lifecycle.py) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.
 

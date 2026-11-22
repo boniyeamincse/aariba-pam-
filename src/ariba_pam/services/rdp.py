@@ -4,15 +4,19 @@ Defines the RDP proxy configuration, client compatibility matrix,
 clipboard restriction, drive redirection blocking, and graphics recording policies.
 """
 
+import hashlib
+import hmac
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
+from ariba_pam.config import settings
 from ariba_pam.db.models import Asset, TargetAccount, AccessGrant, AccessSession, AccessPolicyVersion
 from ariba_pam.core.errors import ValidationException, ForbiddenException, NotFoundException
 from ariba_pam.db.base import utc_now, ensure_utc
 from ariba_pam.services.vault import VaultCredentialService
+from ariba_pam.services.audit import AuditService
 
 
 class RDPSecurityPolicy(BaseModel):
@@ -112,9 +116,32 @@ class RDPGatewayService:
             account_id=account.id,
         )
 
+        tunnel_token = hmac.new(
+            settings.gateway_api_secret.encode("utf-8"),
+            f"{session.id}:{grant.id}:{asset.id}".encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        AuditService.record_event(
+            db=db,
+            event_type="RDP_TUNNEL_COMPILED",
+            correlation_id=f"corr_rdp_{session.id}",
+            actor_id=session.gateway_id or "gateway",
+            payload={
+                "session_id": session.id,
+                "grant_id": grant.id,
+                "asset_id": asset.id,
+                "protocol": "rdp",
+                "security": policy.security_mode,
+                "clipboard_disabled": policy.disable_clipboard,
+                "drive_redirection_disabled": policy.disable_drive_redirection,
+            },
+        )
+
         return {
             "session_id": session.id,
             "grant_id": grant.id,
+            "tunnel_token": tunnel_token,
             "protocol": "rdp",
             "hostname": asset.host,
             "port": asset.port or 3389,

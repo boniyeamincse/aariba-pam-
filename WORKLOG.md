@@ -9,9 +9,9 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 6 Active (`P6-01: Select an RDP implementation and Windows lab matrix` Complete)
-- **Control Plane Test Health**: `101 passed, 2 skipped` (`DEBUG=false pytest -v`)
-- **Gateway Test Health**: `12 passed` (`cd gateway && go test -v ./...`)
+- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Active (`P7-01: Add a Wazuh event adapter` Next)
+- **Control Plane Test Health**: `106 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Gateway Test Health**: `15 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
 - **Database Migration State**: Alembic head (`0008_rdp_support.py`)
 - **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Multi-Custodian Quorum, Transactional Audit Outbox, Bidirectional Schema Migration Reversibility.
@@ -33,7 +33,34 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 17: RDP Architecture, Client Compatibility Matrix & Security Policy (`P6-01`) (Current)
+### Session 18: RDP Authorization, Revocation, Confirmed Termination & Evidence in the Lab (`P6-02`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Go SSH & RDP Gateway Session Proxy (`gateway/rdp.go`)**:
+     - Implemented `ActiveRDPSession` managing full-duplex RDP / Guacamole stream proxying between workforce client and Windows target.
+     - Enforces bounded lease watcher: queries Control Plane periodically, terminates immediately upon grant revocation or renewal failure (`409 Conflict`).
+     - Integrated `SessionRecorder` for visual frame interception with fail-closed buffer (10 MB buffer, 30s grace period) and auto-termination callback on recording partition.
+     - Reports confirmed termination event (`state: "ended"`) with cryptographic recording digests and coverage metrics back to Control Plane.
+  2. **Go Gateway Verification Suite (`gateway/rdp_test.go`)**:
+     - `TestRDPSessionLifecycleAndStreamInterception`: Tests bi-directional mouse/keyboard input and display frame interception, SHA-256 digest computation, and event delivery.
+     - `TestRDPSessionLeaseWatcherRevocationTermination`: Simulates revoked grant rejecting lease renewal (409), verifying connection teardown within ~2 seconds and termination callback.
+     - `TestRDPSessionRecordingFailureTermination`: Simulates evidence sink partition / buffer exhaustion, verifying fail-closed termination and reporting `coverage_status: "gap"`.
+  3. **Python Control Plane RDP Enhancements (`src/ariba_pam/services/rdp.py` & `src/ariba_pam/api/internal/gateway.py`)**:
+     - Generated HMAC-SHA256 authenticated `tunnel_token` binding session, grant, and asset.
+     - Recorded atomic `RDP_TUNNEL_COMPILED` event in `AuditOutbox`.
+     - Verified automated post-session rotation of Windows target vault credentials upon session closure.
+  4. **Python E2E RDP Lifecycle Verification Suite (`tests/test_rdp_session_lifecycle.py`)**:
+     - `test_scoped_rdp_access_authorization_and_anti_enumeration`: Validates scoped request, approval, launch token issuance, HTTP 404 anti-enumeration concealment for out-of-scope operators/users, and parameter compilation with vault secret injection and default-deny restrictions.
+     - `test_operator_revocation_and_confirmed_termination_within_budget`: Demonstrates operator grant revocation, immediate lease rejection, confirmed termination within < 60s latency budget, and automated target vault credential rotation.
+     - `test_operator_session_termination_and_scoped_visibility`: Validates session visibility, out-of-scope 404 concealment, and operator direct session termination.
+     - `test_rdp_recording_failure_fail_closed_handling`: Demonstrates visual capture pipeline failure fail-closed termination, `coverage_status: "gap"` ingestion, `CAPTURE_FAILURE` critical SOC alert emission, and automated vault password lockdown.
+     - `test_rdp_expired_grant_fails_closed_and_auto_rotates`: Validates that expired grant windows fail closed, reject lease renewals, and auto-rotate credentials.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **106 passed, 2 skipped** (in 9.28s).
+  - `cd gateway && go test -v ./...`: **15 passed** (in 4.47s).
+  - `cd web && npm run build`: **10/10 static routes compiled successfully**.
+
+### Session 17: RDP Architecture, Client Compatibility Matrix & Security Policy (`P6-01`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:

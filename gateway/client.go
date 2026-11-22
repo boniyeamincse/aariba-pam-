@@ -256,6 +256,7 @@ func (c *ControlPlaneClient) RetrieveVaultSecret(ctx context.Context, grantID, s
 type RDPTunnelResponse struct {
 	SessionID               string `json:"session_id"`
 	GrantID                 string `json:"grant_id"`
+	TunnelToken             string `json:"tunnel_token,omitempty"`
 	Protocol                string `json:"protocol"`
 	Hostname                string `json:"hostname"`
 	Port                    int    `json:"port"`

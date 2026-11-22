@@ -50,7 +50,6 @@ Prioritize these after the pilot review. See [future enhancements](../docs/18-FU
 
 | ID | Task | Depends on | Completion check |
 | --- | --- | --- | --- |
-| P6-02 | Validate RDP authorization and evidence in the lab | P6-01 | Demonstrate scoped access, revocation, confirmed termination, and recording failure handling |
 | P7-01 | Add a Wazuh event adapter | P5-10 | Verify event filtering, authenticated delivery, deduplication, and observable retry |
 | P7-02 | Add an Ariba SOC event adapter | P5-10 | Verify correlation identifiers, routed alerts, and delivery failure monitoring |
 | P7-03 | Evaluate an additional IdP | P5-10 | Document assurance mapping and repeat disablement checks for the selected provider |
