@@ -25,4 +25,4 @@ Basic pilot recovery and an available SOC alert path are part of Phase 5. Expand
 
 For each change, record the requirement and expected check, implement the smallest complete workflow, run the corresponding tests, record actual results, and commit the reviewed change and supporting documentation.
 
-Track work in [TODO](../tasks/TODO.md) and acceptance in the [test plan](16-TESTING-STRATEGY.md).
+The [development task backlog](../tasks/TODO.md) breaks each phase into scoped work items with dependencies and completion checks. Track acceptance in the [test plan](16-TESTING-STRATEGY.md).

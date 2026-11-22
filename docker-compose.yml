@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ariba-pam-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ariba_pam
+      POSTGRES_USER: ariba_pam_user
+      POSTGRES_PASSWORD: synthetic_lab_db_password_never_use_in_prod
+    volumes:
+      - pam_pgdata:/var/lib/postgresql/data
+    networks:
+      - pam_db_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ariba_pam_user -d ariba_pam"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  control-plane:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ariba-pam-control-plane
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: lab
+      DATABASE_URL: postgresql+psycopg://ariba_pam_user:synthetic_lab_db_password_never_use_in_prod@postgres:5432/ariba_pam
+      SECRET_KEY: synthetic-lab-secret-key-ariba-pam-do-not-use-in-production-32b
+      GATEWAY_API_SECRET: synthetic-gateway-shared-secret-lab
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - pam_ingress_net
+      - pam_db_net
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pam_pgdata:
+    driver: local
+
+networks:
+  pam_ingress_net:
+    driver: bridge
+  pam_db_net:
+    driver: bridge
+    internal: true

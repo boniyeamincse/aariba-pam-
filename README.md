@@ -31,7 +31,7 @@ This repository contains the product and engineering baseline. The runtime, depl
 ## Start Phase 0
 
 1. Review deployment scope, identity provider, signing custody, and pilot criteria in the [decision log](decisions/architecture-decisions.md).
-2. Take the first unblocked item in [TODO](tasks/TODO.md) and move it to [IN-PROGRESS](tasks/IN-PROGRESS.md). Record the owner and expected evidence.
+2. Take the first unblocked item in the [development task backlog](tasks/TODO.md) and move it to [IN-PROGRESS](tasks/IN-PROGRESS.md). Record the owner and expected evidence.
 3. Move the item to [COMPLETED](tasks/COMPLETED.md) once its evidence is available. Record material changes in the [changelog](CHANGELOG.md).
 
 ## Implementation specifications
@@ -41,5 +41,33 @@ This repository contains the product and engineering baseline. The runtime, depl
 | Modules | [Control plane](specifications/modules/control-plane.md), [SSH gateway](specifications/modules/ssh-gateway.md), [Audit and recovery](specifications/modules/audit-and-recovery.md) |
 | Pilot feature | [Interactive SSH access](specifications/features/ssh-access-request.md) |
 | Integrations | [Enterprise identity](specifications/integrations/enterprise-identity.md), [Security events](specifications/integrations/security-events.md) |
+
+## Running and Testing
+
+### Setup and Testing
+```bash
+# Set up Python virtual environment and dependencies
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+
+# Run full test suite
+pytest -v
+```
+
+### Starting Control Plane
+```bash
+# Run migrations
+alembic upgrade head
+
+# Start API service
+uvicorn ariba_pam.main:app --host 0.0.0.0 --port 8000
+```
+
+### Running with Docker Compose
+```bash
+# Start isolated database and control plane
+docker compose up -d
+```
 
 The [issues directory](issues) is available for local issue records. Follow the [repository instructions](AGENTS.md) when making changes.
