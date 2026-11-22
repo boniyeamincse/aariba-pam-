@@ -22,12 +22,67 @@ from ariba_pam.core.errors import (
     NotFoundException,
     ConflictException,
     ValidationException,
+    ServiceUnavailableException,
 )
 from ariba_pam.db.base import generate_id, utc_now
 from ariba_pam.api.schemas import CreateRequestInput, ReplaceRevisionInput
 from ariba_pam.services.policies import authorize_request
+from ariba_pam.services.itsm import itsm_adapter
 
 router = APIRouter(prefix="/requests", tags=["Access Requests"])
+
+def _validate_ticket_if_required(
+    db: Session,
+    ticket_ref: Optional[str],
+    rules: Any,
+    account: TargetAccount,
+    user: User,
+    correlation_id: str,
+) -> None:
+    """Validate ticket reference against ITSM adapter if required by policy or target account."""
+    if not (getattr(rules, "requires_ticket", False) or account.requires_ticket):
+        return
+
+    result = itsm_adapter.validate_ticket(
+        ticket_ref=ticket_ref or "",
+        requester_email=user.email,
+        requester_id=user.id,
+    )
+    if not result.valid:
+        if result.is_provider_unavailable:
+            allow, msg = itsm_adapter.evaluate_fallback(result)
+            if not allow:
+                raise ServiceUnavailableException(result.reason, code=result.code)
+
+            # Record degraded fallback outbox event
+            AuditService.record_event(
+                db=db,
+                event_type="TICKET_VALIDATION_DEGRADED",
+                correlation_id=correlation_id,
+                actor_id=user.id,
+                payload={
+                    "ticket_ref": ticket_ref,
+                    "code": result.code,
+                    "reason": msg,
+                },
+            )
+            return
+
+        raise ValidationException(result.reason, code=result.code)
+
+    # Valid ticket
+    AuditService.record_event(
+        db=db,
+        event_type="TICKET_VALIDATED",
+        correlation_id=correlation_id,
+        actor_id=user.id,
+        payload={
+            "ticket_ref": result.ticket_ref,
+            "state": result.state,
+            "assignee": result.assignee,
+            "title": result.title,
+        },
+    )
 
 
 @router.post("", response_model=Dict[str, Any], status_code=201)
@@ -67,6 +122,7 @@ def submit_access_request(
     version, rules = authorize_request(
         db, asset, account, payload.requested_start_at, payload.requested_end_at, payload.ticket_ref
     )
+    _validate_ticket_if_required(db, payload.ticket_ref, rules, account, current_user, x_correlation_id)
 
     # Create Request
     req = AccessRequest(
@@ -120,6 +176,7 @@ def submit_access_request(
         "step_id": steps[0].id,
         "policy_version_id": version.id,
         "status": req.status,
+        "ticket_ref": rev.ticket_ref,
     }
 
     # Record outbox audit event atomically
@@ -341,6 +398,7 @@ def replace_request_revision(
         new_end_at,
         new_ticket_ref,
     )
+    _validate_ticket_if_required(db, new_ticket_ref, rules, account, current_user, x_correlation_id)
 
     # Invalidate previous pending steps
     prev_steps = db.scalars(
@@ -389,6 +447,7 @@ def replace_request_revision(
         "policy_version_id": policy_ver.id,
         "step_id": new_steps[0].id,
         "status": req.status,
+        "ticket_ref": new_rev.ticket_ref,
     }
 
     AuditService.record_event(

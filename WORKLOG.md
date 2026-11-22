@@ -9,8 +9,8 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Active (`P7-01`, `P7-02`, & `P7-03` Complete · `P7-04: Validate an ITSM ticket reference integration` Next)
-- **Control Plane Test Health**: `132 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Complete (`P7-01`, `P7-02`, `P7-03`, & `P7-04` Complete) · Phase 8 Active (`P8-01: Validate control-plane and gateway failover` Next)
+- **Control Plane Test Health**: `142 passed, 2 skipped` (`DEBUG=false pytest -v`)
 - **Gateway Test Health**: `15 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
 - **Database Migration State**: Alembic head (`0008_rdp_support.py`)
@@ -33,7 +33,39 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 21: Multi-Provider IdP Evaluation, AMR Assurance Normalization & Disablement Verification (`P7-03`) (Current)
+### Session 22: ITSM Ticket Reference Validation, State Verification, Anti-Hijacking & Outage Fallback (`P7-04`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:
+     - Documented `ADR-016: Adopt ITSM Ticket Validation Adapter with State Verification, Assignee Matching, Timeouts, and Policy Fallback`.
+     - Specified provider-neutral regex validation (Jira, ServiceNow, generic `[A-Z0-9_]+-\d+`), active/approved lifecycle state verification, assignee anti-hijacking validation against requester identity, strict 3.0s timeout budget, and outage fallback policies (`fail_closed` default deny vs `manual_approval` degraded escalation).
+  2. **Integration Architecture Documentation (`docs/16-INTEGRATION-ARCHITECTURE.md`)**:
+     - Updated Section 3 with ITSM ticket verification sequence, anti-hijacking rules, outage fallback state machine, and synthetic lab mock registry (`LAB-42`, `JIRA-1001`, `JIRA-1002`, `JIRA-1003`, `INC-9911`, `TIMEOUT-TICKET`, `ERROR-500-TICKET`).
+  3. **ITSM Configuration Settings (`src/ariba_pam/config.py`)**:
+     - Added `itsm_enabled`, `itsm_provider`, `itsm_api_url`, `itsm_api_token`, `itsm_timeout_seconds`, `itsm_allowed_states`, and `itsm_fallback_mode`.
+  4. **ITSM Validation Adapter Service (`src/ariba_pam/services/itsm.py`)**:
+     - Implemented `ITSMAdapter` with:
+       - Format validation and normalization across Jira, ServiceNow, and custom ticket schemes.
+       - Lifecycle state verification enforcing approved active change/incident states.
+       - Requester assignee and collaborator matching preventing ticket hijacking.
+       - Strict timeout handling and network exception isolation.
+       - Outage fallback evaluation supporting `fail_closed` and `manual_approval` (with degraded status audit).
+       - Synthetic lab mock registry for deterministic offline testing.
+  5. **Access Request Workflow Integration (`src/ariba_pam/api/v1/requests.py`)**:
+     - Integrated `_validate_ticket_if_required` into `submit_access_request` and `replace_request_revision`.
+     - Atomically logs `TICKET_VALIDATED` or `TICKET_VALIDATION_DEGRADED` to `AuditOutbox`.
+     - Returns `ticket_ref` in access request and revision response payloads.
+  6. **Admin ITSM Endpoints (`src/ariba_pam/api/v1/admin.py`)**:
+     - Added `GET /api/v1/admin/integrations/itsm/status` for adapter configuration and health monitoring.
+     - Added `POST /api/v1/admin/integrations/itsm/validate-ticket` probe endpoint restricted to PAM Administrators.
+  7. **Comprehensive Unit & Integration Test Suite (`tests/test_itsm_adapter.py`)**:
+     - 10 tests verifying format validation, active state checks, closed state rejection, assignee mismatch rejection, timeout fail-closed handling, manual approval degraded fallback, request submission lifecycle, and admin endpoint access control.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **142 passed, 2 skipped** (in 9.20s).
+  - `cd gateway && go test -v ./...`: **15 passed** (in 4.47s).
+  - `cd web && npm run build`: **10/10 static routes compiled successfully**.
+
+### Session 21: Multi-Provider IdP Evaluation, AMR Assurance Normalization & Disablement Verification (`P7-03`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:

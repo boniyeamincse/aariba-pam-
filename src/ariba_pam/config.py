@@ -60,6 +60,15 @@ class Settings(BaseSettings):
     secondary_idp_audience: str = "ariba-pam-control-plane-entra"
     secondary_idp_assurance_mode: str = "phishing_resistant"
 
+    # ITSM Ticket Reference Integration (P7-04, ADR-016)
+    itsm_enabled: bool = True
+    itsm_provider: str = "jira"  # jira, servicenow, mock
+    itsm_api_url: str = "https://jira.internal/rest/api/2"
+    itsm_api_token: str = "synthetic-itsm-token"
+    itsm_timeout_seconds: float = 3.0
+    itsm_allowed_states: List[str] = ["In Progress", "Approved", "Scheduled", "Active", "Open"]
+    itsm_fallback_mode: str = "fail_closed"  # fail_closed, manual_approval
+
     # CORS
     cors_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 

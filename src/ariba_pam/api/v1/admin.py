@@ -30,6 +30,7 @@ from ariba_pam.services.vault import VaultCredentialService
 from ariba_pam.services.wazuh import wazuh_adapter
 from ariba_pam.services.soc_adapter import soc_adapter
 from ariba_pam.services.idp import MultiIdPService, AMR_CLASSIFICATIONS
+from ariba_pam.services.itsm import itsm_adapter
 
 router = APIRouter(prefix="/admin", tags=["Administration & Change Control"])
 
@@ -539,6 +540,41 @@ def get_idp_federation_status(
         "assurance_rules": serializable_rules,
         "phishing_resistant_mfa_required": settings.require_phishing_resistant_mfa,
     }
+
+
+@router.get("/integrations/itsm/status", response_model=Dict[str, Any])
+def get_itsm_adapter_status(
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve enterprise ITSM adapter status, configuration, allowed states, and metrics (P7-04, ADR-016)."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if not any(r in user_roles for r in ("admin", "operator", "auditor", "custodian")):
+        raise ForbiddenException("Insufficient permissions to inspect ITSM adapter status", code="NOT_PERMITTED")
+
+    return itsm_adapter.get_status()
+
+
+@router.post("/integrations/itsm/validate-ticket", response_model=Dict[str, Any])
+def test_validate_ticket(
+    ticket_ref: str,
+    requester_email: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Test ticket validation against ITSM provider for administrative verification."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if "admin" not in user_roles and "operator" not in user_roles:
+        raise ForbiddenException("Only administrators or operators can execute test ticket validation", code="NOT_PERMITTED")
+
+    result = itsm_adapter.validate_ticket(
+        ticket_ref=ticket_ref,
+        requester_email=requester_email,
+        requester_id=current_user.id,
+    )
+    return {
+        "validation_result": result.model_dump(),
+        "adapter_status": itsm_adapter.get_status(),
+    }
+
 
 
 

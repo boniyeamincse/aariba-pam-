@@ -160,14 +160,36 @@ Every incident payload emitted by the adapter enforces end-to-end distributed tr
 
 ---
 
-## 3. ITSM Ticket Reference Integration
+## 3. ITSM Ticket Reference Integration (P7-04, ADR-016)
 
-When an asset or target account is configured with `requires_ticket: true`:
-1. The requester must supply a valid ticket reference (e.g. `JIRA-4819` or `INC-9912`).
-2. An ITSM adapter validates ticket status:
-   - Verifies the ticket exists and is currently in an `In Progress` or `Approved` state.
-   - Verifies the requester is listed as an assignee or collaborator.
-3. **Fail-Closed Fallback**: If the ticketing system is unreachable, the asset policy defines whether the request is rejected immediately or routed to secondary manual manager approval.
+When an asset or target account is configured with `requires_ticket: true` in its active authorization policy:
+
+### 1. Mandatory Ticket Reference Validation Workflow
+1. **Format Validation**: Validates the ticket identifier against enterprise ticketing regex patterns (e.g., Jira `^[A-Z0-9]+-\d+$`, ServiceNow `^(INC|CHG|REQ|RITM|PRB)\d+$`, or generic `^[A-Z0-9_]+-[A-Z0-9_-]+$`).
+2. **State & Lifecycle Verification**: Queries the enterprise ITSM provider (Jira REST API v2/v3, ServiceNow Table API, or synthetic lab mock) to confirm:
+   - The ticket exists in the system.
+   - The ticket is currently in an active or approved lifecycle state (e.g. `In Progress`, `Approved`, `Scheduled`, `Open`).
+   - Requests referencing `Closed`, `Resolved`, `Rejected`, or `Cancelled` tickets are rejected with `HTTP 400 TICKET_INVALID_STATE`.
+3. **Requester Permission & Assignee Matching**:
+   - Compares the authenticated requester's email (`user.email`) or identity subject against the ticket's designated `assignee`, `reporter`, or authorized collaborator list.
+   - Requesters attempting to utilize someone else's ticket without authorization are rejected with `HTTP 400 TICKET_ASSIGNEE_MISMATCH` to prevent ticket hijacking.
+
+### 2. Bounded Network Latency & Timeout Protection
+- Outbound API calls to external ITSM providers are subject to a strict timeout (default: **3.0 seconds**).
+- Prevents slow external ticketing APIs from blocking Control Plane worker threads or degrading access request throughput.
+
+### 3. Outage & Unavailability Fallback Policies
+When the external ITSM provider is unreachable (DNS resolution failure, network timeout, or HTTP 5xx responses), the policy engine evaluates the configured fallback strategy:
+- **`fail_closed` (Default Production Invariant)**:
+  - If the ITSM provider cannot be reached to verify ticket status, the request is rejected immediately with **HTTP 503 Service Unavailable** (`TICKET_SYSTEM_UNAVAILABLE`).
+  - Guarantees that unverified access cannot slip through during ticketing outages.
+- **`manual_approval` (Emergency Operational Fallback)**:
+  - If explicitly configured for lower-risk tiers, the request is allowed to submit with a `TICKET_VALIDATION_DEGRADED` warning flag.
+  - Automatically escalates the approval workflow to require secondary manual manager approval and logs an audit outbox event.
+
+### 4. Audit Trail & Evidence
+- Successful validations log `TICKET_VALIDATED` in the transactional audit outbox.
+- Degraded submissions log `TICKET_VALIDATION_DEGRADED` with failure details and timeout metrics.
 
 ---
 
