@@ -9,8 +9,8 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Active (`P7-01: Add a Wazuh event adapter` Next)
-- **Control Plane Test Health**: `106 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Active (`P7-01` Complete · `P7-02: Add an Ariba SOC event adapter` Next)
+- **Control Plane Test Health**: `114 passed, 2 skipped` (`DEBUG=false pytest -v`)
 - **Gateway Test Health**: `15 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
 - **Database Migration State**: Alembic head (`0008_rdp_support.py`)
@@ -33,7 +33,36 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 18: RDP Authorization, Revocation, Confirmed Termination & Evidence in the Lab (`P6-02`) (Current)
+### Session 19: Wazuh SIEM Event Adapter with Filtering, Deduplication & Observable Retry (`P7-01`)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:
+     - Documented `ADR-013: Adopt Wazuh SIEM Adapter with Authenticated Delivery, Event Filtering, Deduplication, and Observable Retry`.
+     - Specified OSSEC schema mapping, severity translation, sliding window cryptographic deduplication (SHA-256), and dead-letter queue escalation.
+  2. **Integration Architecture Documentation (`docs/16-INTEGRATION-ARCHITECTURE.md`)**:
+     - Updated Section 2 with Wazuh architecture, authentication types (Bearer, API Key, Basic), OSSEC rule/decoder taxonomy (Rule IDs 100201 - 100208, Levels 4 - 15), deduplication sliding window, and exponential backoff retry formula.
+  3. **Wazuh Adapter Configuration (`src/ariba_pam/config.py`)**:
+     - Added `wazuh_enabled`, `wazuh_api_url`, `wazuh_api_key`, `wazuh_auth_type`, `wazuh_agent_id`, `wazuh_agent_name`, `wazuh_min_severity`, `wazuh_max_retries`, `wazuh_backoff_base_seconds`, `wazuh_dedup_window_seconds`, `wazuh_verify_ssl`.
+  4. **Wazuh SIEM Domain Service (`src/ariba_pam/services/wazuh.py`)**:
+     - Implemented `WazuhAdapter` providing:
+       - Configurable severity filtering (`LOW=1`, `MEDIUM=2`, `HIGH=3`, `CRITICAL=4`), event type filtering, and routine noise suppression.
+       - Cryptographic sliding-window deduplication using SHA-256 fingerprinting.
+       - Wazuh OSSEC schema event transformation with standard fields (`timestamp`, `rule_id`, `rule_level`, `rule_description`, `agent`, `data`).
+       - Authenticated delivery supporting Bearer token, API Key, and Basic Auth headers.
+       - Observable retry with exponential backoff and terminal dead-lettering (`delivery_state: "failed"`).
+       - Outbox batch dispatch (`dispatch_outbox_events`) integrating with `AuditOutbox` and raising `EVIDENCE_DELIVERY_FAILURE` SOC alert on terminal delivery failure.
+  5. **Admin Integration Endpoints (`src/ariba_pam/api/v1/admin.py`)**:
+     - Added `GET /api/v1/admin/integrations/wazuh/status` returning adapter health, buffer, and deduplication stats.
+     - Added `POST /api/v1/admin/integrations/wazuh/dispatch` triggering outbox sync to Wazuh.
+     - Added `POST /api/v1/admin/integrations/wazuh/test-event` for integration testing and verification.
+  6. **Comprehensive Unit & Integration Test Suite (`tests/test_wazuh_adapter.py`)**:
+     - 8 tests verifying severity filtering, event type exclusion, OSSEC payload formatting, deduplication window, exponential backoff retry, terminal failure handling, outbox dispatch with SOC alert emission, and admin status/test endpoints.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **114 passed, 2 skipped** (in 6.31s).
+  - `cd gateway && go test -v ./...`: **15 passed** (in 4.46s).
+  - `cd web && npm run build`: **10/10 static routes compiled successfully**.
+
+### Session 18: RDP Authorization, Revocation, Confirmed Termination & Evidence in the Lab (`P6-02`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Go SSH & RDP Gateway Session Proxy (`gateway/rdp.go`)**:

@@ -26,6 +26,7 @@ from ariba_pam.services.policies import (
     validate_proposed_policy,
 )
 from ariba_pam.services.vault import VaultCredentialService
+from ariba_pam.services.wazuh import wazuh_adapter
 
 router = APIRouter(prefix="/admin", tags=["Administration & Change Control"])
 
@@ -389,5 +390,69 @@ def get_target_vault_status(
         raise ForbiddenException("Insufficient permissions to inspect vault status", code="NOT_PERMITTED")
 
     return VaultCredentialService.get_credential_metadata(db=db, account_id=account_id)
+
+
+@router.get("/integrations/wazuh/status", response_model=Dict[str, Any])
+def get_wazuh_adapter_status(
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve Wazuh SIEM adapter status, configuration, and observable delivery metrics (P7-01, ADR-013)."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if not any(r in user_roles for r in ("admin", "operator", "auditor", "custodian")):
+        raise ForbiddenException("Insufficient permissions to inspect SIEM adapter status", code="NOT_PERMITTED")
+
+    return wazuh_adapter.get_metrics()
+
+
+@router.post("/integrations/wazuh/dispatch", response_model=Dict[str, Any])
+def dispatch_wazuh_outbox(
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Manually dispatch pending audit outbox events to Wazuh SIEM."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if "admin" not in user_roles and "operator" not in user_roles:
+        raise ForbiddenException("Only administrators or operators can dispatch SIEM outbox events", code="NOT_PERMITTED")
+
+    results = wazuh_adapter.dispatch_outbox_events(db, batch_limit=limit)
+    return {
+        "dispatched_count": len(results),
+        "results": [r.model_dump() for r in results],
+        "metrics": wazuh_adapter.get_metrics(),
+    }
+
+
+@router.post("/integrations/wazuh/test-event", response_model=Dict[str, Any])
+def send_wazuh_test_event(
+    event_type: str = "ACCESS_GRANT_REVOKED",
+    severity: str = "HIGH",
+    current_user: User = Depends(get_current_user),
+):
+    """Generate and deliver a test security event to verify Wazuh integration and rule decoding."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if "admin" not in user_roles and "operator" not in user_roles:
+        raise ForbiddenException("Only administrators or operators can trigger SIEM test events", code="NOT_PERMITTED")
+
+    test_payload = {
+        "id": f"test_aud_{generate_id('evt')}",
+        "event_type": event_type,
+        "severity": severity,
+        "correlation_id": f"corr_wazuh_test_{generate_id('tst')}",
+        "actor_id": current_user.id,
+        "payload": {
+            "test": True,
+            "initiated_by": current_user.email,
+            "description": "Synthetic test event for Wazuh SIEM rule validation",
+        },
+        "occurred_at": utc_now().isoformat(),
+    }
+    result = wazuh_adapter.deliver(test_payload)
+    return {
+        "test_event": test_payload,
+        "delivery_result": result.model_dump(),
+        "metrics": wazuh_adapter.get_metrics(),
+    }
+
 
 
