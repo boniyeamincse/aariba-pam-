@@ -35,5 +35,6 @@
 | P3-09 | Verify the gateway lab milestone | [tests/test_gateway_milestone.py](../tests/test_gateway_milestone.py), [gateway/gateway_test.go](../gateway/gateway_test.go) |
 | P4-01 | Integrate isolated SSH certificate signing | [src/ariba_pam/services/ca.py](../src/ariba_pam/services/ca.py), [src/ariba_pam/api/internal/gateway.py](../src/ariba_pam/api/internal/gateway.py), [tests/test_ssh_ca.py](../tests/test_ssh_ca.py) |
 | P4-02 | Test CA rollover, revocation, and recovery | [src/ariba_pam/services/ca.py](../src/ariba_pam/services/ca.py), [tests/test_ssh_ca.py](../tests/test_ssh_ca.py) |
+| P5-CONSOLE | Scaffold Enterprise Web Console in Next.js + TypeScript | [web/app/page.tsx](../web/app/page.tsx), [web/lib/api-client.ts](../web/lib/api-client.ts), [web/package.json](../web/package.json) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.
