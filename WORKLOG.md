@@ -9,11 +9,11 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 5 Active (Pilot SOC Alerts & Health Monitoring Complete)
-- **Control Plane Test Health**: `67 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Current Milestone**: Phase 5 Active (Backup & Restore Rehearsal Complete)
+- **Control Plane Test Health**: `73 passed, 2 skipped` (`DEBUG=false pytest -v`)
 - **Gateway Test Health**: `7 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
-- **Database Migration State**: Alembic head (`0004_soc_alerts.py`)
+- **Database Migration State**: Alembic head (`0005_backup_rehearsals.py`)
 - **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Transactional Audit Outbox.
 
 ---
@@ -33,7 +33,34 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 11: Pilot SOC Alerts & Health Monitoring (`P5-06`) (Current)
+### Session 12: Disaster Recovery Backup & Restore Rehearsal (`P5-07`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Disaster Recovery Schema & Migration (`src/ariba_pam/db/models.py`, `alembic/versions/0005_backup_rehearsals.py`)**:
+     - Added `BackupRehearsalRecord` model tracking exercise references, operator identities, snapshot IDs, RTO and RPO metrics, status, restored table counts, stale grant reconciliation metrics, and independent WORM evidence verification.
+     - Created migration `0005_backup_rehearsals.py` and verified in migration runner test suite.
+  2. **Backup & Disaster Recovery Service (`src/ariba_pam/services/backup.py`)**:
+     - Implemented `BackupRestoreService.create_snapshot`: generates deterministic point-in-time snapshot across all 18 PAM database tables with cryptographic SHA-256 master manifest digest and atomic audit logging (`BACKUP_SNAPSHOT_CREATED`).
+     - Implemented `BackupRestoreService.execute_restore_rehearsal`:
+       - Enforces tamper-evident snapshot verification (rejects corrupted/modified snapshots fail-closed with `SNAPSHOT_CORRUPTED`).
+       - Restores records in foreign-key topological order.
+       - **Strict Stale Grant Reconciliation Invariant (T-09)**: Any grant active in the backup that expired during the outage window is reconciled fail-closed to `status: "ended"`. Revoked grants remain revoked. Active sessions tied to expired or revoked grants are terminated with `termination_reason: "Reconciled after backup restore"`.
+       - Measures actual RTO ($RTO \le 900\text{s} / 15\text{m}$) and validates RPO ($RPO \le 60\text{s} / 1\text{m}$) against `NFR-04` targets.
+       - Runs independent cryptographic verification on restored audit evidence via `AuditService.verify_integrity`.
+  3. **Admin Disaster Recovery APIs (`src/ariba_pam/api/v1/admin.py`, `src/ariba_pam/api/schemas.py`)**:
+     - `POST /api/v1/admin/backup/snapshots`: On-demand snapshot creation restricted to administrators/operators.
+     - `POST /api/v1/admin/backup/restore-rehearsal`: Automated staging restore rehearsal execution.
+     - `GET /api/v1/admin/backup/rehearsals`: Historical disaster recovery exercise audit logs.
+  4. **Integration Test Suite (`tests/test_backup_restore.py`)**:
+     - Added 6 dedicated tests verifying snapshot generation, RTO/RPO targets, stale grant fail-closed closure, revoked grant preservation, tampered snapshot rejection, and administrative RBAC.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **73 passed, 2 skipped** (in 6.97s).
+  - `cd gateway && go test -v ./...`: **7 passed** (in 2.12s).
+  - `npm run build` in `web/`: **10/10 static routes compiled successfully**.
+
+---
+
+### Session 11: Pilot SOC Alerts & Health Monitoring (`P5-06`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **SOC Alerts Schema & Migration (`src/ariba_pam/db/models.py`, `alembic/versions/0004_soc_alerts.py`)**:
@@ -243,13 +270,13 @@ The following tasks are prioritized for execution:
 [Phase 3 Complete ✓] ──► [Phase 4 Ephemeral CA Complete ✓] ──► [Phase 5 Evidence & Web Console Active]
 ```
 
-### Priority 1: Backup and Restore Rehearsal (`P5-07`)
-- **Objective**: Run backup and restore rehearsal, measure RTO and RPO, verify restored evidence, and confirm stale grants stay closed (`NFR-04`, `T-09`).
-- **Target Files**: `tests/test_backup_restore.py`, `src/ariba_pam/services/backup.py`
-
-### Priority 2: Drill Out-of-Band Emergency Access (`P5-08`)
+### Priority 1: Drill Out-of-Band Emergency Access (`P5-08`)
 - **Objective**: Simulate PAM and IdP outage. Record scoped access, SOC notice, independent evidence, review, and cleanup (`FR-11`, `T-09`).
-- **Target Files**: `tests/test_emergency_breakglass.py`
+- **Target Files**: `tests/test_emergency_breakglass.py`, `src/ariba_pam/services/emergency.py`
+
+### Priority 2: Verify Capacity, Client Compatibility, and Deployment Rollback (`P5-09`)
+- **Objective**: Record latency and capacity under representative load. Verify artifacts, migration, and rollback with existing data (`NFR-05`, `NFR-08`, `T-10`).
+- **Target Files**: `tests/test_capacity_rollback.py`
 
 ---
 

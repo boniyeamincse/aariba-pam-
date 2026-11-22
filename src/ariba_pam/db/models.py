@@ -6,6 +6,7 @@ from sqlalchemy import (
     String,
     Boolean,
     Integer,
+    Float,
     ForeignKey,
     DateTime,
     Text,
@@ -394,4 +395,30 @@ class SOCAlert(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     acknowledged_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[acknowledged_by_id])
+
+
+class BackupRehearsalRecord(Base):
+    """Tracks disaster recovery exercises, RTO/RPO measurements, and restored evidence audits (P5-07, NFR-04, T-09)."""
+
+    __tablename__ = "backup_rehearsals"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: generate_id("reh"))
+    exercise_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    operator_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), nullable=False)
+    snapshot_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    rto_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    rpo_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    target_rto_seconds: Mapped[float] = mapped_column(Float, default=900.0, nullable=False)  # 15 minutes (NFR-04)
+    target_rpo_seconds: Mapped[float] = mapped_column(Float, default=60.0, nullable=False)   # 1 minute (NFR-04)
+    status: Mapped[str] = mapped_column(String(32), default="completed", nullable=False)     # completed, failed
+    restored_counts: Mapped[Dict[str, int]] = mapped_column(JSON, nullable=False)
+    reconciled_grants_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reconciled_sessions_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    worm_verified: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    discrepancies: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    operator: Mapped["User"] = relationship("User", foreign_keys=[operator_id])
+
 

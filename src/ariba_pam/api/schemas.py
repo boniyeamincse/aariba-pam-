@@ -238,3 +238,38 @@ class SOCAlertResponse(BaseModel):
     acknowledged_by_id: Optional[str] = None
     acknowledged_at: Optional[AwareDatetime] = None
     created_at: AwareDatetime
+
+
+class CreateSnapshotInput(BaseModel):
+    """POST /api/v1/admin/backup/snapshots payload."""
+
+    label: str = "dr_rehearsal_snapshot"
+
+
+class RestoreRehearsalInput(BaseModel):
+    """POST /api/v1/admin/backup/restore-rehearsal payload."""
+
+    exercise_ref: str = "EX-2026-DR-01"
+    snapshot: Optional[Dict[str, Any]] = None
+    simulated_data_loss_seconds: float = 12.0
+
+
+class BackupRehearsalResponse(BaseModel):
+    """Restore rehearsal record response."""
+
+    id: str
+    exercise_ref: str
+    operator_id: str
+    snapshot_id: str
+    rto_seconds: float
+    rpo_seconds: float
+    target_rto_seconds: float
+    target_rpo_seconds: float
+    status: str
+    restored_counts: Dict[str, int]
+    reconciled_grants_count: int
+    reconciled_sessions_count: int
+    worm_verified: bool
+    notes: Optional[str] = None
+    created_at: AwareDatetime
+

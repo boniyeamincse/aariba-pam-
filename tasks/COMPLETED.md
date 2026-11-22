@@ -42,6 +42,7 @@
 | P5-04 | Add scoped audit search and recording playback | [src/ariba_pam/api/v1/recordings.py](../src/ariba_pam/api/v1/recordings.py), [web/components/player.tsx](../web/components/player.tsx), [tests/test_audit_exports.py](../tests/test_audit_exports.py) |
 | P5-05 | Add separately scoped recording and audit exports | [src/ariba_pam/api/v1/audit.py](../src/ariba_pam/api/v1/audit.py), [src/ariba_pam/api/v1/recordings.py](../src/ariba_pam/api/v1/recordings.py), [tests/test_audit_exports.py](../tests/test_audit_exports.py) |
 | P5-06 | Configure pilot SOC alerts and health monitoring | [src/ariba_pam/services/alerts.py](../src/ariba_pam/services/alerts.py), [src/ariba_pam/api/v1/alerts.py](../src/ariba_pam/api/v1/alerts.py), [src/ariba_pam/api/internal/gateway.py](../src/ariba_pam/api/internal/gateway.py), [tests/test_soc_alerts.py](../tests/test_soc_alerts.py) |
+| P5-07 | Run backup and restore rehearsal | [src/ariba_pam/services/backup.py](../src/ariba_pam/services/backup.py), [src/ariba_pam/api/v1/admin.py](../src/ariba_pam/api/v1/admin.py), [alembic/versions/0005_backup_rehearsals.py](../alembic/versions/0005_backup_rehearsals.py), [tests/test_backup_restore.py](../tests/test_backup_restore.py) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.
 
