@@ -619,4 +619,53 @@ func (m *testConnMetadata) ServerVersion() []byte { return []byte("SSH-2.0-Ariba
 func (m *testConnMetadata) RemoteAddr() net.Addr  { return &net.IPAddr{IP: net.ParseIP("192.168.1.100")} }
 func (m *testConnMetadata) LocalAddr() net.Addr   { return &net.IPAddr{IP: net.ParseIP("10.0.1.1")} }
 
+func TestControlPlaneClientRetrieveVaultSecret(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Gateway-Secret") != "test_secret" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if r.URL.Path == "/internal/v1/credentials/vault-secret" {
+			var body map[string]string
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if body["grant_id"] == "grnt_valid" && body["session_id"] == "ses_valid" && body["target_account_id"] == "act_valid" {
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]string{
+					"credential_type": "password",
+					"secret_value":    "SuperSecretPassword123!",
+					"username":        "dbadmin",
+				})
+				return
+			}
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"code":"GRANT_EXPIRED"}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	client := NewControlPlaneClient(ts.URL, "gw_test", "test_secret")
+
+	// 1. Successful retrieval
+	ctx := context.Background()
+	secret, err := client.RetrieveVaultSecret(ctx, "grnt_valid", "ses_valid", "act_valid")
+	if err != nil {
+		t.Fatalf("expected successful vault secret retrieval, got: %v", err)
+	}
+	if secret.CredentialType != "password" || secret.SecretValue != "SuperSecretPassword123!" || secret.Username != "dbadmin" {
+		t.Errorf("unexpected secret response: %+v", secret)
+	}
+
+	// 2. Rejected retrieval (e.g. expired grant)
+	_, err = client.RetrieveVaultSecret(ctx, "grnt_expired", "ses_valid", "act_valid")
+	if err == nil {
+		t.Error("expected error for expired grant retrieval, got nil")
+	}
+}
+
+
 

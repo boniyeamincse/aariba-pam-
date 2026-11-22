@@ -9,11 +9,11 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 5 Complete (`P5-10: Review Evidence and Approve the Limited Production Pilot` Approved & Exited)
-- **Control Plane Test Health**: `88 passed, 2 skipped` (`DEBUG=false pytest -v`)
-- **Gateway Test Health**: `10 passed` (`cd gateway && go test -v ./...`)
+- **Current Milestone**: Phase 4 & Phase 5 100% Complete (`P4-03: Scoped Vault-Backed Target Access & Post-Session Rotation` Complete)
+- **Control Plane Test Health**: `95 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Gateway Test Health**: `11 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
-- **Database Migration State**: Alembic head (`0006_emergency_requests.py`)
+- **Database Migration State**: Alembic head (`0007_vault_credentials.py`)
 - **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Multi-Custodian Quorum, Transactional Audit Outbox, Bidirectional Schema Migration Reversibility.
 
 ---
@@ -33,7 +33,33 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 15: Limited Production Pilot Exit Review & ADR Acceptance (`P5-10`) (Current)
+### Session 16: Scoped Vault-Backed Credential Custody & Post-Session Rotation (`P4-03`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Alembic Migration & Schema Modeling (`0007_vault_credentials.py` & `src/ariba_pam/db/models.py`)**:
+     - Extended `TargetAccount` with `credential_type` (`ssh_certificate` vs `vault_secret`), `vault_secret_path`, `auto_rotate_on_session_end`, `last_rotated_at`, and `rotation_status`.
+     - Created `VaultSecretStore` table with AES-256-GCM ciphertext payload, key versioning, and cascading target account bindings.
+     - Implemented bidirectional `upgrade()` and `downgrade()` with verified rollback testing across all 7 migrations (`test_migration_rollback.py`).
+  2. **Vault Credential Domain Service (`src/ariba_pam/services/vault.py`)**:
+     - `store_target_credential`: Restricted to Vault Custodians (anti-superuser principle; standard PAM admins denied). Implemented AES-256-GCM authenticated payload encryption.
+     - `retrieve_secret_for_gateway`: Enforced JIT secret retrieval validating active, unexpired, and non-revoked `AccessGrant` and active `AccessSession`. Recorded atomic transactional audit event `vault_secret.retrieved`.
+     - `rotate_target_credential`: Generates 32-character high-entropy alphanumeric + symbol passwords, re-encrypts vault storage, increments `key_version`, updates `last_rotated_at`, and commits `vault_secret.rotated` audit event.
+     - `get_credential_metadata`: Returns metadata without disclosing plaintext secret.
+  3. **Internal Gateway & Administrative Endpoints (`gateway.py` & `admin.py`)**:
+     - Added internal endpoint `POST /internal/v1/credentials/vault-secret` with mutual secret verification.
+     - Added automated post-session rotation in `POST /internal/v1/sessions/{id}/events`: When a session closes, accounts configured for `vault_secret` immediately trigger background rotation and invalidation.
+     - Added Vault Custodian routes: `POST /api/v1/admin/vault/targets/{account_id}/store`, `POST /api/v1/admin/vault/targets/{account_id}/rotate`, and scoped `GET /api/v1/admin/vault/targets/{account_id}/status` with HTTP 404 anti-enumeration concealment.
+  4. **Go SSH Gateway Client Extension (`gateway/client.go` & `gateway_test.go`)**:
+     - Added `RetrieveVaultSecret` method in `ControlPlaneClient` and `VaultSecretResponse` struct.
+     - Added unit test `TestControlPlaneClientRetrieveVaultSecret` validating successful retrieval and rejection on expired grants.
+  5. **Verification & Testing (`tests/test_vault_credentials.py`)**:
+     - 7 unit/integration tests covering custodian boundary, JIT retrieval, revoked/expired rejection, non-disclosure, auto-rotation, manual rotation, and HTTP 404 concealment.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **95 passed, 2 skipped** (in 9.71s).
+  - `cd gateway && go test -v ./...`: **11 passed** (in 2.19s).
+  - `cd web && npm run build`: **10/10 static routes compiled successfully**.
+
+### Session 15: Limited Production Pilot Exit Review & ADR Acceptance (`P5-10`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Formal ADR Log Update & Acceptance (`decisions/architecture-decisions.md`)**:

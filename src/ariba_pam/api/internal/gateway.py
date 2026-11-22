@@ -9,12 +9,13 @@ from ariba_pam.config import settings
 from ariba_pam.db.session import get_db
 from ariba_pam.db.models import SessionLaunch, AccessGrant, AccessSession, Asset, TargetAccount, SessionRecording
 from ariba_pam.services.audit import AuditService
-from ariba_pam.core.errors import ForbiddenException, NotFoundException, ConflictException, UnauthorizedException
+from ariba_pam.core.errors import ForbiddenException, NotFoundException, ConflictException, UnauthorizedException, ValidationException
 from ariba_pam.db.base import generate_id, utc_now, ensure_utc
 from ariba_pam.api.schemas import LaunchConsumeInput, CertificateSignInput, CertificateSignOutput, GatewayHeartbeatInput
 from ariba_pam.services.policies import authorize_revision
 from ariba_pam.services.ca import ca_service
 from ariba_pam.services.alerts import soc_alerts_service
+from ariba_pam.services.vault import VaultCredentialService
 
 router = APIRouter(prefix="/internal/v1", tags=["Internal Gateway Interfaces"])
 
@@ -121,6 +122,8 @@ def consume_launch(
     return {
         "session_id": session.id,
         "grant_id": grant.id,
+        "target_account_id": grant.target_account.id,
+        "credential_type": getattr(grant.target_account, "credential_type", "ssh_certificate"),
         "target_host": grant.asset.host,
         "target_port": grant.asset.port,
         "target_username": grant.target_account.username,
@@ -219,10 +222,35 @@ def record_gateway_event(
 
     event_state = payload.get("state")
     if session.status not in ("ended", "failed"):
-        if event_state == "ended":
+        if event_state in ("ended", "closed"):
             session.status = "ended"
             session.ended_at = utc_now()
             session.termination_reason = payload.get("reason", "Gateway closed session")
+
+            # Post-session automated credential rotation (P4-03)
+            if session.grant and session.grant.target_account:
+                account = session.grant.target_account
+                if getattr(account, "credential_type", "ssh_certificate") == "vault_secret" and getattr(account, "auto_rotate_on_session_end", True):
+                    try:
+                        VaultCredentialService.rotate_target_credential(
+                            db=db,
+                            account_id=account.id,
+                            trigger_reason="session_ended",
+                            actor_id=session.gateway_id,
+                        )
+                    except Exception as e:
+                        soc_alerts_service.record_alert(
+                            db=db,
+                            alert_type="ROTATION_FAILURE",
+                            severity="HIGH",
+                            title="Target credential rotation failed",
+                            description=f"Automated post-session rotation failed for account {account.id}: {str(e)}",
+                            correlation_id=x_correlation_id,
+                            details={"account_id": account.id, "error": str(e)},
+                            session_id=session.id,
+                            gateway_id=session.gateway_id,
+                            asset_id=session.grant.asset_id if session.grant else None,
+                        )
         elif event_state == "failed":
             session.status = "failed"
             session.ended_at = utc_now()
@@ -426,5 +454,32 @@ def record_gateway_heartbeat(
         "capture_status": hb["capture_status"],
         "healthy": hb["status"] == "healthy" and hb["capture_status"] == "healthy",
     }
+
+
+@router.post("/credentials/vault-secret", response_model=Dict[str, Any])
+def retrieve_vault_secret(
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    _gw_auth: None = Depends(verify_gateway_identity),
+):
+    """
+    Internal Gateway endpoint to retrieve target credentials for vault-backed targets (P4-03).
+    Strictly verifies active grant and session, non-disclosure to client.
+    """
+    grant_id = payload.get("grant_id")
+    session_id = payload.get("session_id")
+    account_id = payload.get("target_account_id")
+    if not grant_id or not session_id or not account_id:
+        raise ValidationException("grant_id, session_id, and target_account_id are required")
+
+    res = VaultCredentialService.retrieve_secret_for_gateway(
+        db=db,
+        grant_id=grant_id,
+        session_id=session_id,
+        account_id=account_id,
+    )
+    db.commit()
+    return res
+
 
 

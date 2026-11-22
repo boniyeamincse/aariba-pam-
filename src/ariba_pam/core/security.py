@@ -99,3 +99,31 @@ def verify_session_token(token: str) -> Dict[str, Any]:
         raise
     except Exception as e:
         raise UnauthorizedException(f"Token verification failed: {str(e)}", code="INVALID_TOKEN")
+
+
+def encrypt_vault_payload(plaintext: str, key: Optional[bytes] = None) -> str:
+    """Encrypt a secret string using AES-256-GCM. Returns base64 string nonce + ciphertext + tag."""
+    import os
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    if key is None:
+        key = hashlib.sha256(settings.secret_key.encode("utf-8")).digest()
+    aesgcm = AESGCM(key)
+    nonce = os.urandom(12)
+    ciphertext = aesgcm.encrypt(nonce, plaintext.encode("utf-8"), None)
+    return base64.b64encode(nonce + ciphertext).decode("ascii")
+
+
+def decrypt_vault_payload(encrypted_b64: str, key: Optional[bytes] = None) -> str:
+    """Decrypt base64 nonce + ciphertext + tag using AES-256-GCM."""
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    if key is None:
+        key = hashlib.sha256(settings.secret_key.encode("utf-8")).digest()
+    data = base64.b64decode(encrypted_b64.encode("ascii"))
+    nonce = data[:12]
+    ciphertext = data[12:]
+    aesgcm = AESGCM(key)
+    plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+    return plaintext.decode("utf-8")
+

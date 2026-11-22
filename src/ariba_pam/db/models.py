@@ -113,12 +113,33 @@ class TargetAccount(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     requires_ticket: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     max_duration_seconds: Mapped[int] = mapped_column(Integer, default=3600, nullable=False)
+    credential_type: Mapped[str] = mapped_column(String(32), default="ssh_certificate", nullable=False)  # ssh_certificate, vault_secret
+    vault_secret_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    auto_rotate_on_session_end: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_rotated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    rotation_status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)  # active, rotating, failed
 
     asset: Mapped["Asset"] = relationship("Asset", back_populates="accounts")
 
     __table_args__ = (
         UniqueConstraint("asset_id", "username", name="uq_asset_account"),
     )
+
+
+class VaultSecretStore(Base):
+    """Encrypted vault-backed credential store for targets requiring static secrets."""
+
+    __tablename__ = "vault_secret_store"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: generate_id("vsec"))
+    account_id: Mapped[str] = mapped_column(String(64), ForeignKey("target_accounts.id", ondelete="CASCADE"), unique=True, nullable=False)
+    secret_type: Mapped[str] = mapped_column(String(32), default="password", nullable=False)  # password, private_key
+    encrypted_payload: Mapped[str] = mapped_column(Text, nullable=False)
+    key_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    account: Mapped["TargetAccount"] = relationship("TargetAccount")
 
 
 class AdminChangeProposal(Base):

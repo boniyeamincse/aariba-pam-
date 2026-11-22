@@ -12,13 +12,15 @@ import (
 
 // LaunchResponse contains the authorization details returned by the control plane.
 type LaunchResponse struct {
-	SessionID      string    `json:"session_id"`
-	GrantID        string    `json:"grant_id"`
-	TargetHost     string    `json:"target_host"`
-	TargetPort     int       `json:"target_port"`
-	TargetUsername string    `json:"target_username"`
-	LeaseDeadline  time.Time `json:"lease_deadline"`
-	GrantExpiry    time.Time `json:"grant_expiry"`
+	SessionID       string    `json:"session_id"`
+	GrantID         string    `json:"grant_id"`
+	TargetAccountID string    `json:"target_account_id"`
+	CredentialType  string    `json:"credential_type"`
+	TargetHost      string    `json:"target_host"`
+	TargetPort      int       `json:"target_port"`
+	TargetUsername  string    `json:"target_username"`
+	LeaseDeadline   time.Time `json:"lease_deadline"`
+	GrantExpiry     time.Time `json:"grant_expiry"`
 }
 
 // RenewResponse contains the updated lease deadline from renewal.
@@ -77,13 +79,15 @@ func (c *ControlPlaneClient) ConsumeLaunch(ctx context.Context, launchToken stri
 	}
 
 	var raw struct {
-		SessionID      string `json:"session_id"`
-		GrantID        string `json:"grant_id"`
-		TargetHost     string `json:"target_host"`
-		TargetPort     int    `json:"target_port"`
-		TargetUsername string `json:"target_username"`
-		LeaseDeadline  string `json:"lease_deadline"`
-		GrantExpiry    string `json:"grant_expiry"`
+		SessionID       string `json:"session_id"`
+		GrantID         string `json:"grant_id"`
+		TargetAccountID string `json:"target_account_id"`
+		CredentialType  string `json:"credential_type"`
+		TargetHost      string `json:"target_host"`
+		TargetPort      int    `json:"target_port"`
+		TargetUsername  string `json:"target_username"`
+		LeaseDeadline   string `json:"lease_deadline"`
+		GrantExpiry     string `json:"grant_expiry"`
 	}
 	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
 		return nil, fmt.Errorf("failed to parse launch response: %w", err)
@@ -99,13 +103,15 @@ func (c *ControlPlaneClient) ConsumeLaunch(ctx context.Context, launchToken stri
 	}
 
 	return &LaunchResponse{
-		SessionID:      raw.SessionID,
-		GrantID:        raw.GrantID,
-		TargetHost:     raw.TargetHost,
-		TargetPort:     raw.TargetPort,
-		TargetUsername: raw.TargetUsername,
-		LeaseDeadline:  leaseDeadline,
-		GrantExpiry:    grantExpiry,
+		SessionID:       raw.SessionID,
+		GrantID:         raw.GrantID,
+		TargetAccountID: raw.TargetAccountID,
+		CredentialType:  raw.CredentialType,
+		TargetHost:      raw.TargetHost,
+		TargetPort:      raw.TargetPort,
+		TargetUsername:  raw.TargetUsername,
+		LeaseDeadline:   leaseDeadline,
+		GrantExpiry:     grantExpiry,
 	}, nil
 }
 
@@ -202,4 +208,48 @@ func (c *ControlPlaneClient) SendEventWithRecording(ctx context.Context, session
 	}
 	return nil
 }
+
+// VaultSecretResponse contains the decrypted secret returned from the control plane.
+type VaultSecretResponse struct {
+	CredentialType string `json:"credential_type"`
+	SecretValue    string `json:"secret_value"`
+	Username       string `json:"username"`
+}
+
+// RetrieveVaultSecret retrieves a vault-backed credential for target connection injection (P4-03).
+func (c *ControlPlaneClient) RetrieveVaultSecret(ctx context.Context, grantID, sessionID, targetAccountID string) (*VaultSecretResponse, error) {
+	reqBody, err := json.Marshal(map[string]string{
+		"grant_id":          grantID,
+		"session_id":        sessionID,
+		"target_account_id": targetAccountID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/internal/v1/credentials/vault-secret", bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Gateway-Secret", c.Secret)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("control plane connection error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("vault secret retrieval rejected (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var secretResp VaultSecretResponse
+	if err := json.NewDecoder(resp.Body).Decode(&secretResp); err != nil {
+		return nil, fmt.Errorf("failed to decode vault secret response: %w", err)
+	}
+	return &secretResp, nil
+}
+
 

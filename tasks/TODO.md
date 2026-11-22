@@ -36,11 +36,7 @@ All Phase 3 tasks (P3-01 through P3-09) and their implementation evidence have b
 
 ## Phase 4 · Credential custody
 
-| ID | Task | Depends on | Check or reference | Completion check |
-| --- | --- | --- | --- | --- |
-| P4-03 | Add scoped vault-backed target access when required | P4-01, approved vault need from P0-03 | FR-06, SEC-05, T-06 | Verify scoped secret use, non-disclosure, rotation, and recovery before onboarding any stored-credential target |
-
-Completed Phase 4 tasks (P4-01, P4-02) with verification evidence have been moved to [COMPLETED.md](COMPLETED.md).
+All Phase 4 tasks (P4-01, P4-02, P4-03) and their implementation evidence have been completed, verified, and recorded in [COMPLETED.md](COMPLETED.md).
 
 ## Phase 5 · Evidence and production pilot
 

@@ -25,6 +25,7 @@ from ariba_pam.services.policies import (
     scoped_policy_asset,
     validate_proposed_policy,
 )
+from ariba_pam.services.vault import VaultCredentialService
 
 router = APIRouter(prefix="/admin", tags=["Administration & Change Control"])
 
@@ -309,4 +310,84 @@ def list_restore_rehearsals(
         )
         for r in rehearsals
     ]
+
+
+@router.post("/vault/targets/{account_id}/store", response_model=Dict[str, Any], status_code=201)
+def store_target_vault_credential(
+    account_id: str,
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Store or update an encrypted target credential in the vault store (P4-03, SEC-08).
+    Restricted to Vault Custodians. Standard PAM Admins are forbidden (anti-superuser principle).
+    """
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if "vault_custodian" not in user_roles and "custodian" not in user_roles:
+        raise ForbiddenException("Operation restricted to Vault Custodians (SEC-08)", code="NOT_VAULT_CUSTODIAN")
+
+    secret_value = payload.get("secret_value")
+    if not secret_value:
+        raise ForbiddenException("secret_value is required", code="INVALID_SECRET_PAYLOAD")
+
+    secret_type = payload.get("secret_type", "password")
+    res = VaultCredentialService.store_target_credential(
+        db=db,
+        account_id=account_id,
+        secret_value=secret_value,
+        secret_type=secret_type,
+        actor_id=current_user.id,
+    )
+    db.commit()
+    return res
+
+
+@router.post("/vault/targets/{account_id}/rotate", response_model=Dict[str, Any])
+def rotate_target_vault_credential(
+    account_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Manually trigger password/key rotation for a vault-backed target account.
+    Restricted to Vault Custodians (SEC-08).
+    """
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if "vault_custodian" not in user_roles and "custodian" not in user_roles:
+        raise ForbiddenException("Operation restricted to Vault Custodians (SEC-08)", code="NOT_VAULT_CUSTODIAN")
+
+    res = VaultCredentialService.rotate_target_credential(
+        db=db,
+        account_id=account_id,
+        trigger_reason="custodian_manual_rotation",
+        actor_id=current_user.id,
+    )
+    db.commit()
+    return res
+
+
+@router.get("/vault/targets/{account_id}/status", response_model=Dict[str, Any])
+def get_target_vault_status(
+    account_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieve vault credential status and rotation metadata for a target account.
+    Plaintext secrets are NEVER disclosed (FR-06, SEC-05).
+    Conceals out-of-scope targets with HTTP 404.
+    """
+    account = db.get(TargetAccount, account_id)
+    if not account:
+        raise NotFoundException("Target account not found", code="ACCOUNT_NOT_FOUND")
+
+    ScopeChecker.assert_asset_scope(current_user, account.asset)
+
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if not any(r in user_roles for r in ("admin", "operator", "vault_custodian", "custodian", "auditor")):
+        raise ForbiddenException("Insufficient permissions to inspect vault status", code="NOT_PERMITTED")
+
+    return VaultCredentialService.get_credential_metadata(db=db, account_id=account_id)
+
 

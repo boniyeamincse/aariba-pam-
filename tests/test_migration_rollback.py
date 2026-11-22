@@ -132,7 +132,27 @@ def test_step_by_step_migration_rollback_and_data_preservation():
                 {"now": now},
             )
 
-        # 3. Step 1: Downgrade from 0006 to 0005
+            # 0007: vault_secret_store
+            conn.execute(
+                text(
+                    "INSERT INTO vault_secret_store (id, account_id, secret_type, encrypted_payload, key_version, created_at, updated_at) "
+                    "VALUES ('vsec_01', 'acc_admin', 'password', 'enc:test-secret-value', 1, :now, :now)"
+                ),
+                {"now": now},
+            )
+
+        # 3. Step 0: Downgrade from 0007 to 0006
+        command.downgrade(alembic_cfg, "0006_emergency_requests")
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
+        assert "vault_secret_store" not in tables
+        assert "emergency_requests" in tables
+        assert "emergency_approvals" in tables
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT count(*) FROM emergency_requests")).scalar() == 1
+            assert conn.execute(text("SELECT count(*) FROM assets")).scalar() == 1
+
+        # Step 1: Downgrade from 0006 to 0005
         command.downgrade(alembic_cfg, "0005_backup_rehearsals")
         inspector = inspect(engine)
         tables = set(inspector.get_table_names())
