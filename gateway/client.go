@@ -252,4 +252,59 @@ func (c *ControlPlaneClient) RetrieveVaultSecret(ctx context.Context, grantID, s
 	return &secretResp, nil
 }
 
+// RDPTunnelResponse contains the compiled connection parameters and security policies for RDP sessions.
+type RDPTunnelResponse struct {
+	SessionID               string `json:"session_id"`
+	GrantID                 string `json:"grant_id"`
+	Protocol                string `json:"protocol"`
+	Hostname                string `json:"hostname"`
+	Port                    int    `json:"port"`
+	Username                string `json:"username"`
+	Password                string `json:"password"`
+	Security                string `json:"security"`
+	DisableClipboard        bool   `json:"disable_clipboard"`
+	DisableDriveRedirection bool   `json:"disable_drive_redirection"`
+	DisableAudio            bool   `json:"disable_audio"`
+	DisablePrinting         bool   `json:"disable_printing"`
+	EnableRecording         bool   `json:"enable_recording"`
+	RecordingName           string `json:"recording_name"`
+	LeaseDeadline           string `json:"lease_deadline"`
+}
+
+// CompileRDPTunnelParameters requests compiled RDP parameters with injected credentials from the control plane (P6-01).
+func (c *ControlPlaneClient) CompileRDPTunnelParameters(ctx context.Context, grantID, sessionID string) (*RDPTunnelResponse, error) {
+	reqBody, err := json.Marshal(map[string]string{
+		"grant_id":   grantID,
+		"session_id": sessionID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/internal/v1/rdp/tunnel-parameters", bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Gateway-Secret", c.Secret)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("control plane connection error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("RDP tunnel compilation rejected (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var tunnelResp RDPTunnelResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tunnelResp); err != nil {
+		return nil, fmt.Errorf("failed to decode RDP tunnel response: %w", err)
+	}
+	return &tunnelResp, nil
+}
+
+
 

@@ -76,3 +76,42 @@ To prevent Man-in-the-Middle (MITM) attacks and unauthorized DNS/IP spoofing:
 - The stream passes through a memory buffer bound for the evidence storage service.
 - If storage delivery stalls, the Gateway buffers up to 10 MB. Once the buffer is exhausted, the Gateway pauses interactive input forwarding and displays a warning to the user.
 - If storage connectivity is not restored within 30 seconds, the Gateway terminates the session to prevent unrecorded administrative activity.
+
+---
+
+## 5. RDP Gateway Proxy & Windows Infrastructure Support (P6-01, ADR-012)
+
+Ariba PAM extends protocol gateway isolation to Windows infrastructure via the **Guacamole Protocol Daemon (`guacd`) and FreeRDP Engine**:
+
+```
+[ Workforce Browser / RDP Client ]        [ Ariba PAM Gateway ]                [ Target Windows Server ]
+               │                                   │                                        │
+               │ 1. Launch Session (Token)         │                                        │
+               ├──────────────────────────────────▶│                                        │
+               │                                   │ 2. POST /internal/v1/rdp/tunnel-params │
+               │                                   │    - Fetch vault-stored credentials    │
+               │                                   │    - Retrieve NLA & policy constraints │
+               │                                   │                                        │
+               │                                   │ 3. Strict Host Certificate Check       │
+               │                                   │    - Validate TLS/NLA thumbprint       │
+               │                                   ├───────────────────────────────────────▶│
+               │ 4. WebSocket / HTML5 Guac Stream  │ 5. Proxy FreeRDP Protocol Stream       │
+               │◀══════════════════════════════════┼═══════════════════════════════════════▶│
+               │                                   │                                        │
+               │                                   │ 6. Enforce Policy Invariants           │
+               │                                   │    - Clipboard: Disabled (Default)     │
+               │                                   │    - Drive Redirection: Blocked        │
+               │                                   │    - Audio / Printers: Disabled        │
+               │                                   │    - Graphic Frame Capture (WORM)      │
+               │                                   │                                        │
+               │ 7. Lease Expiry / Termination     │ 8. Post-Session Credential Rotation    │
+               │◀──────────────────────────────────┼───────────────────────────────────────▶│
+```
+
+### Policy Invariants & Security Controls
+1. **Clipboard Restriction**: Bi-directional copy/paste between client and target Windows desktop is disabled by default to prevent data exfiltration. Can only be selectively overridden through four-eyes reviewed access policies.
+2. **Drive & Storage Redirection Denial**: Client-side drives, folders, and USB devices are strictly prohibited from mounting on the target Windows system.
+3. **NLA Authentication & Vault Credentials**: Windows passwords are never disclosed to the operator; credentials are retrieved JIT from the encrypted Vault and injected directly into the FreeRDP handshake.
+4. **Post-Session Automated Rotation**: Session closure immediately triggers an automated password change on the target account, preventing credential re-use.
+5. **Graphics Session Recording**: The gateway captures visual frame streams with periodic keyframe hashing and SHA-256 integrity digests for WORM evidence preservation.
+

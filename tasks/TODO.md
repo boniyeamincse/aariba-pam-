@@ -50,7 +50,6 @@ Prioritize these after the pilot review. See [future enhancements](../docs/18-FU
 
 | ID | Task | Depends on | Completion check |
 | --- | --- | --- | --- |
-| P6-01 | Select an RDP implementation and Windows lab matrix | P5-10 | Record maintained dependency, supported clients, and policy for clipboard, drive redirection, and recording |
 | P6-02 | Validate RDP authorization and evidence in the lab | P6-01 | Demonstrate scoped access, revocation, confirmed termination, and recording failure handling |
 | P7-01 | Add a Wazuh event adapter | P5-10 | Verify event filtering, authenticated delivery, deduplication, and observable retry |
 | P7-02 | Add an Ariba SOC event adapter | P5-10 | Verify correlation identifiers, routed alerts, and delivery failure monitoring |

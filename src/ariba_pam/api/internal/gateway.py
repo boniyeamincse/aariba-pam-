@@ -16,6 +16,7 @@ from ariba_pam.services.policies import authorize_revision
 from ariba_pam.services.ca import ca_service
 from ariba_pam.services.alerts import soc_alerts_service
 from ariba_pam.services.vault import VaultCredentialService
+from ariba_pam.services.rdp import RDPGatewayService
 
 router = APIRouter(prefix="/internal/v1", tags=["Internal Gateway Interfaces"])
 
@@ -480,6 +481,31 @@ def retrieve_vault_secret(
     )
     db.commit()
     return res
+
+
+@router.post("/rdp/tunnel-parameters", response_model=Dict[str, Any])
+def compile_rdp_tunnel_parameters(
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    _gw_auth: None = Depends(verify_gateway_identity),
+):
+    """
+    Gateway retrieves compiled RDP connection parameters (P6-01, ADR-012).
+    Injects vault password, validates grant and session, and enforces clipboard/drive restrictions.
+    """
+    grant_id = payload.get("grant_id")
+    session_id = payload.get("session_id")
+    if not grant_id or not session_id:
+        raise ValidationException("grant_id and session_id are required")
+
+    res = RDPGatewayService.compile_rdp_connection_parameters(
+        db=db,
+        grant_id=grant_id,
+        session_id=session_id,
+    )
+    db.commit()
+    return res
+
 
 
 

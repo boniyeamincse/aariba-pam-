@@ -94,6 +94,7 @@ class Asset(Base):
     zone_id: Mapped[str] = mapped_column(String(64), ForeignKey("gateway_zones.id"), nullable=False)
     host: Mapped[str] = mapped_column(String(255), nullable=False)
     port: Mapped[int] = mapped_column(Integer, default=22, nullable=False)
+    protocol: Mapped[str] = mapped_column(String(16), default="ssh", nullable=False)  # ssh, rdp
     host_trust_ref: Mapped[str] = mapped_column(String(255), default="")  # pinned host key fingerprint
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

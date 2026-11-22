@@ -9,11 +9,11 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 4 & Phase 5 100% Complete (`P4-03: Scoped Vault-Backed Target Access & Post-Session Rotation` Complete)
-- **Control Plane Test Health**: `95 passed, 2 skipped` (`DEBUG=false pytest -v`)
-- **Gateway Test Health**: `11 passed` (`cd gateway && go test -v ./...`)
+- **Current Milestone**: Phase 6 Active (`P6-01: Select an RDP implementation and Windows lab matrix` Complete)
+- **Control Plane Test Health**: `101 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Gateway Test Health**: `12 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
-- **Database Migration State**: Alembic head (`0007_vault_credentials.py`)
+- **Database Migration State**: Alembic head (`0008_rdp_support.py`)
 - **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Multi-Custodian Quorum, Transactional Audit Outbox, Bidirectional Schema Migration Reversibility.
 
 ---
@@ -33,7 +33,33 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 16: Scoped Vault-Backed Credential Custody & Post-Session Rotation (`P4-03`) (Current)
+### Session 17: RDP Architecture, Client Compatibility Matrix & Security Policy (`P6-01`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:
+     - Documented `ADR-012: Select Guacamole Protocol (guacd) / FreeRDP Gateway Architecture for Windows RDP Access`.
+     - Specified guacd protocol proxy decoupling, fail-closed capture, default-deny redirection (clipboard, drive, audio, printer), and NLA mode requirement.
+  2. **Session Gateway Design Update (`docs/14-SESSION-GATEWAY-DESIGN.md`)**:
+     - Added Section 5 detailing RDP proxy architecture, lab matrix (Windows Server 2022 / Windows 11 Enterprise), tunnel parameters compilation, and client compatibility matrix.
+  3. **Alembic Migration & ORM Schema (`alembic/versions/0008_rdp_support.py` & `src/ariba_pam/db/models.py`)**:
+     - Added `protocol` column (`ssh` vs `rdp`, default `ssh`) to `assets` table.
+     - Updated `tests/test_migration_rollback.py` covering bidirectional rollback across all 8 migrations (`0008` through `0001`).
+  4. **RDP Gateway Domain Service (`src/ariba_pam/services/rdp.py`)**:
+     - Created `RDPSecurityPolicy` enforcing default-deny drive redirection, clipboard sharing, audio/printer mapping, and NLA.
+     - Implemented `RDPGatewayService` generating HMAC-SHA256 authenticated tunnel tokens and recording atomic audit outbox events (`rdp_tunnel.compiled`).
+  5. **Internal Gateway API Route (`src/ariba_pam/api/internal/gateway.py`)**:
+     - Added `POST /internal/v1/rdp/tunnel-parameters` validating mutual secret, checking asset protocol and session validity, and returning tunnel parameters.
+  6. **Go Gateway Client Extension (`gateway/client.go` & `gateway_test.go`)**:
+     - Added `CompileRDPTunnelParameters` and `RDPTunnelResponse` struct to the Go gateway client.
+     - Added `TestControlPlaneClientCompileRDPTunnelParameters` unit test.
+  7. **Pytest Verification Suite (`tests/test_rdp_gateway.py`)**:
+     - 6 unit/integration tests covering tunnel compilation, protocol mismatch rejection, expired/revoked session denial, policy restriction enforcement, outbox logging, and Go client integration.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **101 passed, 2 skipped**.
+  - `cd gateway && go test -v ./...`: **12 passed**.
+  - `cd web && npm run build`: **10/10 static routes compiled successfully**.
+
+### Session 16: Scoped Vault-Backed Credential Custody & Post-Session Rotation (`P4-03`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Alembic Migration & Schema Modeling (`0007_vault_credentials.py` & `src/ariba_pam/db/models.py`)**:

@@ -667,5 +667,69 @@ func TestControlPlaneClientRetrieveVaultSecret(t *testing.T) {
 	}
 }
 
+func TestControlPlaneClientCompileRDPTunnelParameters(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Gateway-Secret") != "test_secret" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if r.URL.Path == "/internal/v1/rdp/tunnel-parameters" {
+			var body map[string]string
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if body["grant_id"] == "grnt_rdp" && body["session_id"] == "ses_rdp" {
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"session_id":                "ses_rdp",
+					"grant_id":                  "grnt_rdp",
+					"protocol":                  "rdp",
+					"hostname":                  "win-ad01.corp",
+					"port":                      3389,
+					"username":                  "DomainAdmin",
+					"password":                  "WinVaultSecret99!",
+					"security":                  "nla",
+					"disable_clipboard":         true,
+					"disable_drive_redirection": true,
+					"disable_audio":             true,
+					"disable_printing":          true,
+					"enable_recording":          true,
+					"recording_name":            "rdp_ses_rdp",
+					"lease_deadline":            "2026-11-22T20:00:00Z",
+				})
+				return
+			}
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"code":"GRANT_EXPIRED"}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	client := NewControlPlaneClient(ts.URL, "gw_test", "test_secret")
+	ctx := context.Background()
+
+	// 1. Success
+	tunnel, err := client.CompileRDPTunnelParameters(ctx, "grnt_rdp", "ses_rdp")
+	if err != nil {
+		t.Fatalf("expected successful RDP tunnel compilation, got: %v", err)
+	}
+	if !tunnel.DisableClipboard || !tunnel.DisableDriveRedirection {
+		t.Errorf("security invariants violated: clipboard or drive redirection enabled: %+v", tunnel)
+	}
+	if tunnel.Port != 3389 || tunnel.Username != "DomainAdmin" || tunnel.Password != "WinVaultSecret99!" {
+		t.Errorf("unexpected tunnel parameters: %+v", tunnel)
+	}
+
+	// 2. Rejected
+	_, err = client.CompileRDPTunnelParameters(ctx, "grnt_expired", "ses_rdp")
+	if err == nil {
+		t.Error("expected error for expired grant RDP compilation, got nil")
+	}
+}
+
+
 
 

@@ -141,7 +141,14 @@ def test_step_by_step_migration_rollback_and_data_preservation():
                 {"now": now},
             )
 
-        # 3. Step 0: Downgrade from 0007 to 0006
+        # 3. Step -1: Downgrade from 0008 to 0007
+        command.downgrade(alembic_cfg, "0007_vault_credentials")
+        inspector = inspect(engine)
+        asset_columns = {col["name"] for col in inspector.get_columns("assets")}
+        assert "protocol" not in asset_columns
+        assert "vault_secret_store" in set(inspector.get_table_names())
+
+        # Step 0: Downgrade from 0007 to 0006
         command.downgrade(alembic_cfg, "0006_emergency_requests")
         inspector = inspect(engine)
         tables = set(inspector.get_table_names())
