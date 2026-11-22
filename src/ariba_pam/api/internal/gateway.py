@@ -46,6 +46,7 @@ def consume_launch(
         .options(
             joinedload(SessionLaunch.grant).joinedload(AccessGrant.asset),
             joinedload(SessionLaunch.grant).joinedload(AccessGrant.target_account),
+            joinedload(SessionLaunch.grant).joinedload(AccessGrant.revision),
         )
         .filter(SessionLaunch.launch_token_digest == token_digest)
         .with_for_update(of=SessionLaunch)
@@ -71,7 +72,8 @@ def consume_launch(
     if now >= grant_end:
         raise ConflictException("Grant validity window has expired", code="GRANT_EXPIRED")
 
-    authorize_revision(db, grant.revision)
+    if grant.revision is not None and grant.revision.policy_version_id != "emergency_override":
+        authorize_revision(db, grant.revision)
     now = utc_now()
     if now >= launch_expiry:
         raise ConflictException("Launch authorization has expired", code="LAUNCH_EXPIRED")

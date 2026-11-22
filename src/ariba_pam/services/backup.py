@@ -197,9 +197,6 @@ class BackupRestoreService:
                     id=r["id"],
                     name=r["name"],
                     description=r.get("description", ""),
-                    is_custom=r.get("is_custom", False),
-                    permissions=r.get("permissions", []),
-                    created_at=parse_dt(r["created_at"]),
                 )
                 target_db.add(role)
         target_db.flush()
@@ -211,8 +208,7 @@ class BackupRestoreService:
                     user_id=ra["user_id"],
                     role_id=ra["role_id"],
                     scope_type=ra["scope_type"],
-                    scope_id=ra["scope_id"],
-                    granted_by=ra.get("granted_by"),
+                    scope_value=ra.get("scope_value", "*"),
                     created_at=parse_dt(ra["created_at"]),
                 )
                 target_db.add(assign)

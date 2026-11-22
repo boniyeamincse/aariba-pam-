@@ -422,3 +422,55 @@ class BackupRehearsalRecord(Base):
     operator: Mapped["User"] = relationship("User", foreign_keys=[operator_id])
 
 
+class EmergencyRequest(Base):
+    """Multi-custodian emergency break-glass access request (FR-11, SOD-04, T-09)."""
+
+    __tablename__ = "emergency_requests"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: generate_id("emg"))
+    asset_id: Mapped[str] = mapped_column(String(64), ForeignKey("assets.id"), nullable=False)
+    target_account_id: Mapped[str] = mapped_column(String(64), ForeignKey("target_accounts.id"), nullable=False)
+    requester_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), nullable=False)
+    justification: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)  # pending, approved, active, revoked, reviewed, rejected
+    required_approvals: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    approval_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    requested_end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    revocation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewer_id: Mapped[Optional[str]] = mapped_column(String(64), ForeignKey("users.id"), nullable=True)
+    review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    grant_id: Mapped[Optional[str]] = mapped_column(String(64), ForeignKey("access_grants.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    asset: Mapped["Asset"] = relationship("Asset")
+    target_account: Mapped["TargetAccount"] = relationship("TargetAccount")
+    requester: Mapped["User"] = relationship("User", foreign_keys=[requester_id])
+    reviewer: Mapped[Optional["User"]] = relationship("User", foreign_keys=[reviewer_id])
+    grant: Mapped[Optional["AccessGrant"]] = relationship("AccessGrant")
+    approvals: Mapped[List["EmergencyApproval"]] = relationship("EmergencyApproval", back_populates="emergency_request", cascade="all, delete-orphan")
+
+
+class EmergencyApproval(Base):
+    """Independent custodian approval or rejection for break-glass emergency access (SOD-04)."""
+
+    __tablename__ = "emergency_approvals"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: generate_id("ema"))
+    emergency_request_id: Mapped[str] = mapped_column(String(64), ForeignKey("emergency_requests.id"), nullable=False)
+    custodian_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), nullable=False)
+    decision: Mapped[str] = mapped_column(String(32), nullable=False)  # approve, reject
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    emergency_request: Mapped["EmergencyRequest"] = relationship("EmergencyRequest", back_populates="approvals")
+    custodian: Mapped["User"] = relationship("User", foreign_keys=[custodian_id])
+
+    __table_args__ = (
+        UniqueConstraint("emergency_request_id", "custodian_id", name="uq_emg_custodian_vote"),
+    )
+
+
+

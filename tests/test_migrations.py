@@ -55,6 +55,8 @@ def test_migration_runner_upgrade_and_rerun():
             "evidence_exports",
             "soc_alerts",
             "backup_rehearsals",
+            "emergency_requests",
+            "emergency_approvals",
             "audit_outbox",
             "idempotency_records",
             "alembic_version",

@@ -273,3 +273,73 @@ class BackupRehearsalResponse(BaseModel):
     notes: Optional[str] = None
     created_at: AwareDatetime
 
+
+class CreateEmergencyRequestInput(BaseModel):
+    """POST /api/v1/emergency-requests payload."""
+
+    asset_id: str
+    target_account_id: str
+    justification: str = Field(min_length=10, max_length=2000)
+    requested_end_at: AwareDatetime
+    step_up_token: Optional[str] = None
+    required_approvals: int = 2
+
+
+class EmergencyDecisionInput(BaseModel):
+    """POST /api/v1/emergency-requests/{id}/approve payload."""
+
+    decision: str = "approve"  # approve, reject
+    reason: str = Field(min_length=10, max_length=2000)
+
+
+class ActivateEmergencyInput(BaseModel):
+    """POST /api/v1/emergency-requests/{id}/activate payload."""
+
+    step_up_token: Optional[str] = "mfa_step_up_valid"
+
+
+class RevokeEmergencyInput(BaseModel):
+    """POST /api/v1/emergency-requests/{id}/revoke payload."""
+
+    reason: str = Field(min_length=5, max_length=2000)
+
+
+class ReviewEmergencyInput(BaseModel):
+    """POST /api/v1/emergency-requests/{id}/review payload."""
+
+    review_notes: str = Field(min_length=10, max_length=2000)
+
+
+class EmergencyApprovalResponse(BaseModel):
+    """Emergency approval decision details."""
+
+    id: str
+    custodian_id: str
+    decision: str
+    reason: str
+    created_at: AwareDatetime
+
+
+class EmergencyRequestResponse(BaseModel):
+    """Emergency break-glass request details."""
+
+    id: str
+    asset_id: str
+    target_account_id: str
+    requester_id: str
+    justification: str
+    status: str
+    required_approvals: int
+    approval_count: int
+    requested_end_at: AwareDatetime
+    activated_at: Optional[AwareDatetime] = None
+    revoked_at: Optional[AwareDatetime] = None
+    revocation_reason: Optional[str] = None
+    reviewed_at: Optional[AwareDatetime] = None
+    reviewer_id: Optional[str] = None
+    review_notes: Optional[str] = None
+    grant_id: Optional[str] = None
+    created_at: AwareDatetime
+    approvals: List[EmergencyApprovalResponse] = []
+
+

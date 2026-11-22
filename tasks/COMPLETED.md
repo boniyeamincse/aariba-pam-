@@ -43,6 +43,7 @@
 | P5-05 | Add separately scoped recording and audit exports | [src/ariba_pam/api/v1/audit.py](../src/ariba_pam/api/v1/audit.py), [src/ariba_pam/api/v1/recordings.py](../src/ariba_pam/api/v1/recordings.py), [tests/test_audit_exports.py](../tests/test_audit_exports.py) |
 | P5-06 | Configure pilot SOC alerts and health monitoring | [src/ariba_pam/services/alerts.py](../src/ariba_pam/services/alerts.py), [src/ariba_pam/api/v1/alerts.py](../src/ariba_pam/api/v1/alerts.py), [src/ariba_pam/api/internal/gateway.py](../src/ariba_pam/api/internal/gateway.py), [tests/test_soc_alerts.py](../tests/test_soc_alerts.py) |
 | P5-07 | Run backup and restore rehearsal | [src/ariba_pam/services/backup.py](../src/ariba_pam/services/backup.py), [src/ariba_pam/api/v1/admin.py](../src/ariba_pam/api/v1/admin.py), [alembic/versions/0005_backup_rehearsals.py](../alembic/versions/0005_backup_rehearsals.py), [tests/test_backup_restore.py](../tests/test_backup_restore.py) |
+| P5-08 | Drill out-of-band emergency access | [src/ariba_pam/services/emergency.py](../src/ariba_pam/services/emergency.py), [src/ariba_pam/api/v1/emergency.py](../src/ariba_pam/api/v1/emergency.py), [alembic/versions/0006_emergency_requests.py](../alembic/versions/0006_emergency_requests.py), [tests/test_emergency_breakglass.py](../tests/test_emergency_breakglass.py) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.
 

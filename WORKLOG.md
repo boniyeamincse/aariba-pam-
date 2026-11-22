@@ -9,12 +9,12 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 5 Active (Backup & Restore Rehearsal Complete)
-- **Control Plane Test Health**: `73 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Current Milestone**: Phase 5 Active (`P5-08: Drill Out-of-Band Emergency Access` Complete)
+- **Control Plane Test Health**: `80 passed, 2 skipped` (`DEBUG=false pytest -v`)
 - **Gateway Test Health**: `7 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
-- **Database Migration State**: Alembic head (`0005_backup_rehearsals.py`)
-- **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Transactional Audit Outbox.
+- **Database Migration State**: Alembic head (`0006_emergency_requests.py`)
+- **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Multi-Custodian Quorum, Transactional Audit Outbox.
 
 ---
 
@@ -33,7 +33,40 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 12: Disaster Recovery Backup & Restore Rehearsal (`P5-07`) (Current)
+### Session 13: Out-of-Band Emergency Break-Glass Access Drill (`P5-08`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Emergency Access Schema & Migration (`src/ariba_pam/db/models.py`, `alembic/versions/0006_emergency_requests.py`)**:
+     - Added `EmergencyRequest` model with fields for asset, target account, requester, justification, approval quorum threshold, end time, activation/revocation/review timestamps, review notes, and grant reference.
+     - Added `EmergencyApproval` model capturing custodian identity, decision (`approve`/`reject`), and mandatory justification.
+     - Created Alembic migration `0006_emergency_requests.py` and validated migration runner idempotency.
+  2. **Emergency Break-Glass Domain Service (`src/ariba_pam/services/emergency.py`)**:
+     - Submits emergency requests with customizable quorum requirement (default 2).
+     - **Strict Separation of Duties (SOD-04)**: Requester cannot self-approve their emergency request; prevents duplicate votes by the same custodian; restricts voting to authorized custodians (`emergency_custodian`, `admin`, `security_operator`).
+     - Activates break-glass access once quorum is reached: creates backing `AccessRequest` and `RequestRevision` with `policy_version_id="emergency_override"` for complete auditability, issues emergency `AccessGrant` and single-use `SessionLaunch` token.
+     - **Immediate SOC Alert Dispatch (FR-11, NFR-08)**: Automatically logs `CRITICAL` alert `EMERGENCY_ACCESS_ACTIVATED` to SOC alerts service upon activation.
+     - Enforces fail-closed revocation: revokes emergency grant and terminates all active sessions immediately with audit logs.
+     - Provides independent post-incident review workflow (`POST /api/v1/emergency-requests/{id}/review`), enforcing that the requester cannot self-review their own emergency incident.
+  3. **Gateway & Internal Integration (`src/ariba_pam/api/internal/gateway.py`)**:
+     - Supported emergency grants with eager revision loading and `emergency_override` bypass in gateway launch consumption.
+  4. **Emergency REST APIs (`src/ariba_pam/api/v1/emergency.py`, `src/ariba_pam/api/schemas.py`, `src/ariba_pam/api/router.py`)**:
+     - `POST /api/v1/emergency-requests`: Submit emergency request.
+     - `GET /api/v1/emergency-requests`: List scoped emergency requests (anti-enumeration 404).
+     - `GET /api/v1/emergency-requests/{id}`: Detailed emergency request with approvals.
+     - `POST /api/v1/emergency-requests/{id}/approve`: Multi-custodian approval/rejection vote.
+     - `POST /api/v1/emergency-requests/{id}/activate`: Quorum-validated activation.
+     - `POST /api/v1/emergency-requests/{id}/revoke`: Fail-closed emergency revocation.
+     - `POST /api/v1/emergency-requests/{id}/review`: Independent post-incident review.
+  5. **Comprehensive Integration Test Suite (`tests/test_emergency_breakglass.py`)**:
+     - 7 comprehensive tests covering emergency request submission, SoD self-approval prevention, multi-custodian quorum with duplicate rejection and SOC alert verification, fail-closed revocation and session termination, independent post-incident review, rejection workflow, and anti-enumeration RBAC.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **80 passed, 2 skipped** (in 7.58s).
+  - `cd gateway && go test -v ./...`: **7 passed** (in 2.12s).
+  - `npm run build` in `web/`: **10/10 static routes compiled successfully**.
+
+---
+
+### Session 12: Disaster Recovery Backup & Restore Rehearsal (`P5-07`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Disaster Recovery Schema & Migration (`src/ariba_pam/db/models.py`, `alembic/versions/0005_backup_rehearsals.py`)**:
