@@ -141,6 +141,21 @@ class AdminChangeProposal(Base):
     reviewer: Mapped[Optional["User"]] = relationship("User", foreign_keys=[reviewer_id])
 
 
+class AccessPolicyVersion(Base):
+    """Immutable rules published by independent review for one asset."""
+
+    __tablename__ = "access_policy_versions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: generate_id("pol"))
+    asset_id: Mapped[str] = mapped_column(String(64), ForeignKey("assets.id"), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    rules: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    proposal_id: Mapped[str] = mapped_column(String(64), ForeignKey("admin_change_proposals.id"), nullable=False, unique=True)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    __table_args__ = (UniqueConstraint("asset_id", "version", name="uq_policy_asset_version"),)
+
+
 class AccessRequest(Base):
     """Access request submitted by a workforce user."""
 
@@ -171,7 +186,7 @@ class RequestRevision(Base):
     requested_end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     justification: Mapped[str] = mapped_column(Text, nullable=False)
     ticket_ref: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    policy_version_id: Mapped[str] = mapped_column(String(64), default="pol_v1", nullable=False)
+    policy_version_id: Mapped[str] = mapped_column(String(64), nullable=False)
     is_frozen: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
@@ -193,7 +208,7 @@ class ApprovalStep(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: generate_id("stp"))
     revision_id: Mapped[str] = mapped_column(String(64), ForeignKey("request_revisions.id", ondelete="CASCADE"), nullable=False)
     step_order: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)  # pending, approved, rejected, cancelled
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)  # waiting, pending, approved, rejected, cancelled
     required_role: Mapped[str] = mapped_column(String(64), default="approver", nullable=False)
 
     revision: Mapped["RequestRevision"] = relationship("RequestRevision", back_populates="steps")

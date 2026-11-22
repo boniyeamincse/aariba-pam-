@@ -30,7 +30,6 @@ Use the [access workflow](../docs/08-USER-WORKFLOW.md), [API contracts](../docs/
 
 | ID | Task | Depends on | Check or reference | Completion check |
 | --- | --- | --- | --- | --- |
-| P2-01 | Implement versioned access policies and reviewed publication | P1-09 | FR-03, FR-04, T-02 | An independently reviewed policy version defines allowed account, time window, and approval steps. Invalid rules fail closed |
 | P2-02 | Submit an access request with an immutable first revision | P2-01 | FR-03, FR-04, T-02 | Persist the validated scope and assigned approval steps together. Deny progression when a required approver cannot be assigned. Successful retry returns the same request |
 | P2-03 | Implement scoped request reads, cancellation, and revision replacement | P2-02 | FR-03, T-02 | The owner can cancel or replace pending revisions. A stale change fails and historical fields remain unchanged |
 | P2-04 | Expose the scoped approver queue | P2-02 | FR-04, T-02 | The queue returns only current pending steps assigned to the caller and within their scope |

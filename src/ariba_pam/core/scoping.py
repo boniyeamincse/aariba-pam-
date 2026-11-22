@@ -25,7 +25,7 @@ class ScopeChecker:
             st = assignment.scope_type.lower()
             sv = assignment.scope_value
 
-            if st == "global" or sv == "*":
+            if st == "global" and sv == "*":
                 return True
             if st == "environment" and sv.lower() == asset.environment.lower():
                 return True

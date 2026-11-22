@@ -6,6 +6,7 @@
 
 - Added the lab sign-in and scoped asset catalog at `/portal`, with synthetic fixtures and browser tests.
 - Restricted synthetic sign-in to the lab environment and to pre-enrolled identities.
+- Added independently reviewed per-asset access policies. Request approvals and new session launches now require a current published policy version.
 
 ### Added
 

@@ -57,7 +57,7 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
         try:
             yield db_session
         finally:
-            pass
+            db_session.rollback()
 
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
@@ -238,3 +238,54 @@ def auth_headers(user_id: str, email: str, amr: list = None) -> dict:
     """Helper generating authorization header with synthetic session token."""
     token = create_session_token(user_id=user_id, email=email, auth_methods=amr)
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def policy_admin(client, seeded_fixtures, db_session):
+    """Provide a policy author and distinct reviewers in separate asset scopes."""
+    from types import SimpleNamespace
+
+    author = seeded_fixtures["dave"]
+    reviewer = seeded_fixtures["bob"]
+    outside = seeded_fixtures["charlie"]
+    asset = seeded_fixtures["asset_payment"]
+    account = seeded_fixtures["acc_pay_admin"]
+    role = Role(name="reviewer", description="Reviews administrative proposals")
+    db_session.add(role)
+    db_session.flush()
+    db_session.add_all([
+        RoleAssignment(user_id=reviewer.id, role_id=role.id, scope_type="team", scope_value="payments"),
+        RoleAssignment(user_id=outside.id, role_id=role.id, scope_type="team", scope_value="analytics"),
+    ])
+    db_session.commit()
+
+    path = "/api/v1/admin/change-proposals"
+
+    def propose(version=0, **rules):
+        return client.post(
+            path,
+            headers=auth_headers(author.id, author.email),
+            json={
+                "resource_type": "policy",
+                "resource_id": asset.id,
+                "expected_version": version,
+                "reason": "Review lab access policy",
+                "change_payload": {
+                    "allowed_target_account_ids": [account.id],
+                    "max_duration_seconds": 3600,
+                    "required_approvals": 1,
+                    **rules,
+                },
+            },
+        )
+
+    def publish(proposal, actor=reviewer, decision="applied"):
+        assert proposal.status_code == 201, proposal.text
+        proposal_id = proposal.json()["proposal_id"]
+        return client.post(
+            f"{path}/{proposal_id}/decisions",
+            headers=auth_headers(actor.id, actor.email),
+            json={"decision": decision},
+        )
+
+    return SimpleNamespace(propose=propose, publish=publish, path=path)

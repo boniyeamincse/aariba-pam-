@@ -12,6 +12,7 @@ from ariba_pam.services.audit import AuditService
 from ariba_pam.core.errors import ForbiddenException, NotFoundException, ConflictException, UnauthorizedException
 from ariba_pam.db.base import generate_id, utc_now, ensure_utc
 from ariba_pam.api.schemas import LaunchConsumeInput
+from ariba_pam.services.policies import authorize_revision
 
 router = APIRouter(prefix="/internal/v1", tags=["Internal Gateway Interfaces"])
 
@@ -45,7 +46,7 @@ def consume_launch(
             joinedload(SessionLaunch.grant).joinedload(AccessGrant.target_account),
         )
         .filter(SessionLaunch.launch_token_digest == token_digest)
-        .with_for_update()
+        .with_for_update(of=SessionLaunch)
         .first()
     )
     if not launch:
@@ -57,7 +58,7 @@ def consume_launch(
 
     now = utc_now()
     launch_expiry = ensure_utc(launch.expires_at)
-    if now > launch_expiry:
+    if now >= launch_expiry:
         raise ConflictException("Launch authorization has expired", code="LAUNCH_EXPIRED")
 
     grant = launch.grant
@@ -65,8 +66,13 @@ def consume_launch(
         raise ConflictException(f"Associated grant is {grant.status}", code="GRANT_NOT_ACTIVE")
 
     grant_end = ensure_utc(grant.effective_end_at)
-    if now > grant_end:
+    if now >= grant_end:
         raise ConflictException("Grant validity window has expired", code="GRANT_EXPIRED")
+
+    authorize_revision(db, grant.revision)
+    now = utc_now()
+    if now >= launch_expiry:
+        raise ConflictException("Launch authorization has expired", code="LAUNCH_EXPIRED")
 
     # Mark consumed atomically
     launch.is_consumed = True

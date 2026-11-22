@@ -3,8 +3,8 @@
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, Header
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import select
+from sqlalchemy.orm import Session, aliased, joinedload
+from sqlalchemy import select, update
 from ariba_pam.db.session import get_db
 from ariba_pam.db.models import (
     User,
@@ -20,6 +20,7 @@ from ariba_pam.core.scoping import ScopeChecker
 from ariba_pam.core.errors import ForbiddenException, NotFoundException, ConflictException
 from ariba_pam.db.base import generate_id, utc_now
 from ariba_pam.api.schemas import DecisionInput
+from ariba_pam.services.policies import authorize_revision
 
 router = APIRouter(tags=["Approvals & Decision Control"])
 
@@ -34,6 +35,13 @@ def list_pending_approvals(
     if "approver" not in user_roles and "admin" not in user_roles:
         return []
 
+    earlier_step = aliased(ApprovalStep)
+    prior_vote = (
+        select(ApprovalDecision.id)
+        .join(earlier_step, earlier_step.id == ApprovalDecision.step_id)
+        .where(earlier_step.revision_id == RequestRevision.id, ApprovalDecision.approver_id == current_user.id)
+        .exists()
+    )
     stmt = (
         select(ApprovalStep)
         .options(
@@ -41,15 +49,23 @@ def list_pending_approvals(
             joinedload(ApprovalStep.revision).joinedload(RequestRevision.target_account),
             joinedload(ApprovalStep.revision).joinedload(RequestRevision.request),
         )
-        .where(ApprovalStep.status == "pending")
+        .join(ApprovalStep.revision)
+        .join(RequestRevision.request)
+        .where(
+            ApprovalStep.status == "pending",
+            AccessRequest.status == "pending",
+            AccessRequest.current_revision_id == RequestRevision.id,
+            ~prior_vote,
+        )
     )
     steps = list(db.scalars(stmt).unique().all())
 
     results = []
     for step in steps:
         rev = step.revision
-        # Check scope on asset
-        if ScopeChecker.is_asset_in_scope(current_user, rev.asset, "approver"):
+        if rev.request.requester_id != current_user.id and ScopeChecker.is_asset_in_scope(
+            current_user, rev.asset, step.required_role
+        ):
             results.append({
                 "step_id": step.id,
                 "request_id": rev.request_id,
@@ -105,17 +121,35 @@ def record_decision(
         raise ForbiddenException("Self-approval is forbidden. Requesters cannot approve their own requests.", code="SELF_APPROVAL_FORBIDDEN")
 
     # Scoped permission check
-    if not ScopeChecker.is_asset_in_scope(current_user, rev.asset, "approver"):
+    if not ScopeChecker.is_asset_in_scope(current_user, rev.asset, step.required_role):
         raise ForbiddenException("Asset is outside caller's approver scope", code="OUT_OF_SCOPE")
 
-    # Prevent duplicate vote by the same principal
+    claimed = db.execute(
+        update(AccessRequest)
+        .where(
+            AccessRequest.id == req.id,
+            AccessRequest.current_revision_id == rev.id,
+            AccessRequest.status == "pending",
+        )
+        .values(updated_at=utc_now())
+    )
+    if not claimed.rowcount:
+        raise ConflictException("Request is no longer pending on this revision", code="STALE_REVISION")
+    db.refresh(step)
+    if step.status != "pending":
+        raise ConflictException("Approval step is no longer pending", code="STEP_ALREADY_DECIDED")
+
     existing_vote = (
         db.query(ApprovalDecision)
-        .filter(ApprovalDecision.step_id == step.id, ApprovalDecision.approver_id == current_user.id)
+        .join(ApprovalStep)
+        .filter(ApprovalStep.revision_id == rev.id, ApprovalDecision.approver_id == current_user.id)
         .first()
     )
     if existing_vote:
-        raise ConflictException("Duplicate vote by the same principal", code="DUPLICATE_VOTE")
+        raise ConflictException("Each approval step requires a different principal", code="DUPLICATE_VOTE")
+
+    if payload.decision == "approved":
+        authorize_revision(db, rev)
 
     # Record decision
     decision_record = ApprovalDecision(
@@ -130,6 +164,12 @@ def record_decision(
     step.status = payload.decision
 
     grant_id = None
+    next_step = db.scalar(
+        select(ApprovalStep)
+        .where(ApprovalStep.revision_id == rev.id, ApprovalStep.status == "waiting")
+        .order_by(ApprovalStep.step_order)
+        .limit(1)
+    )
     if payload.decision == "rejected":
         req.status = "rejected"
         req.updated_at = utc_now()
@@ -144,7 +184,16 @@ def record_decision(
                 "reason": payload.reason,
             },
         )
-    elif payload.decision == "approved":
+    elif next_step is not None:
+        next_step.status = "pending"
+        AuditService.record_event(
+            db=db,
+            event_type="ACCESS_APPROVAL_STEP_APPROVED",
+            correlation_id=x_correlation_id,
+            actor_id=current_user.id,
+            payload={"request_id": req.id, "step_id": step.id, "next_step_id": next_step.id},
+        )
+    else:
         req.status = "approved"
         req.updated_at = utc_now()
 
@@ -172,6 +221,7 @@ def record_decision(
                 "grant_id": grant.id,
                 "request_id": req.id,
                 "revision_id": rev.id,
+                "policy_version_id": rev.policy_version_id,
                 "asset_id": rev.asset_id,
                 "target_account_id": rev.target_account_id,
                 "start_at": grant.effective_start_at.isoformat(),

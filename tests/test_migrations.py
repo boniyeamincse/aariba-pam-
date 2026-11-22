@@ -5,6 +5,8 @@ import os
 from alembic.config import Config
 from alembic import command
 from sqlalchemy import create_engine, inspect
+from sqlalchemy.orm import Session
+from ariba_pam.db.models import GatewayZone
 
 
 def test_migration_runner_upgrade_and_rerun():
@@ -21,10 +23,15 @@ def test_migration_runner_upgrade_and_rerun():
         alembic_cfg = Config("alembic.ini")
         alembic_cfg.set_main_option("sqlalchemy.url", sqlite_url)
 
-        # 1. Apply first migration on empty database
-        command.upgrade(alembic_cfg, "head")
-
+        # Upgrade an existing baseline while preserving its data.
+        command.upgrade(alembic_cfg, "0001_initial_schema")
         engine = create_engine(sqlite_url)
+        with Session(engine) as db:
+            db.add(GatewayZone(id="zon_existing", name="existing-zone"))
+            db.commit()
+        command.upgrade(alembic_cfg, "head")
+        with Session(engine) as db:
+            assert db.get(GatewayZone, "zon_existing").name == "existing-zone"
         inspector = inspect(engine)
         table_names = set(inspector.get_table_names())
 
@@ -36,6 +43,7 @@ def test_migration_runner_upgrade_and_rerun():
             "assets",
             "target_accounts",
             "admin_change_proposals",
+            "access_policy_versions",
             "access_requests",
             "request_revisions",
             "approval_steps",

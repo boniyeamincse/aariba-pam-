@@ -57,6 +57,8 @@ The pilot catalog defines planned checks. Record implementation results below as
 | --- | --- | --- | --- | --- |
 | LAB-P1-08 | Portal sign-in and scoped catalog under FR-01 and FR-02 | Python 3.14, SQLite, Playwright and Chromium, synthetic identities · 2026-11-22 | 23 tests passed, including both browser cases. Verified permitted inventory, loading, empty and denied states, sign-out, and expired-session handling | [API checks](../tests/test_portal.py), [browser checks](../tests/test_portal_browser.py) |
 | LAB-P1-08-PACKAGE | Local installation and fixture smoke check | Package wheel and temporary SQLite database · 2026-11-22 | Wheel contains all three portal files. Applied the migration and ran the seed twice successfully | [Local setup](../README.md#start-the-lab-portal) |
+| LAB-P2-01 | Reviewed policy publication, ordered approvals, and downstream authorization under FR-03, FR-04, and T-02 | Python 3.14, SQLite suite and disposable PostgreSQL 18 · 2026-11-22 | Full suite passed 28 tests. Six policy and workflow tests passed on PostgreSQL. Verified independent review, stale publication denial, invalid rules, distinct approvers, and superseded request and launch denial | [Policy tests](../tests/test_policies.py), [workflow test](../tests/test_workflow.py) |
+| LAB-P2-01-MIGRATION | Policy schema upgrade and downgrade | Disposable PostgreSQL 18 with an existing baseline record · 2026-11-22 | Upgrade preserved the baseline record and created the policy table. Downgrade removed the policy table | [Policy migration](../alembic/versions/0002_access_policy_versions.py) |
 
 These runs verify synthetic lab behavior. T-01 and T-10 still require the approved pilot identity provider, runtime, and pilot test evidence.
 

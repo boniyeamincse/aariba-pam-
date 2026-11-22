@@ -12,7 +12,7 @@ PostgreSQL owns transactional application data. Store secret material and raw re
 | access_requests, request_revisions | Requests belong to a user. Revisions retain immutable approved fields and policy context. Requested end must follow start |
 | approval_steps, approval_decisions | Decisions tie to a revision and step. Store approver, decision, and time. Prevent duplicate votes and enforce independence |
 | approval_assignees | Associates eligible principals with a specific step. Recheck each principal's scope when deciding |
-| policies, policy_versions | Versioned rules and activation times. Decision records identify the evaluated version |
+| access_policy_versions | Immutable rules, publication time, independently reviewed proposal reference, and unique version number per asset. The highest published version is current |
 | admin_change_proposals | Scoped proposed changes, expected resource version, author, reviewer, state, and applied version |
 | access_grants | Grant references request revision and approved scope. Store window, revocation and policy information. Limit issuance to one grant per approved revision |
 | session_launches, access_sessions | A launch belongs to a grant. Store launch digest, expiry, and consumed time. A session maps uniquely to a consumed launch and assigned gateway |
@@ -31,5 +31,7 @@ PostgreSQL owns transactional application data. Store secret material and raw re
 - Index pending approvals by approver scope, grants by subject and effective window, and sessions by grant and gateway. Keep timestamps as UTC instants.
 - Prevent routine administrative edits to past decisions and evidence references. Use retention and hold rules approved under the security requirements.
 - Add migrations with constraints and representative existing records. Verify that deployment and rollback preserve authorization data and evidence. Consider restore and reconciliation when a migration cannot be rolled back safely.
+
+Migration `0002_access_policy_versions` preserves existing access records. It creates no default policy and does not rewrite placeholder policy references on old revisions. An asset requires independent policy publication before further requests can be authorized.
 
 See [lifecycle states](08-USER-WORKFLOW.md) and [PostgreSQL constraints](https://www.postgresql.org/docs/current/ddl-constraints.html).

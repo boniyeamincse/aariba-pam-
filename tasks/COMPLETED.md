@@ -15,5 +15,6 @@
 | P1-07 | Add independently reviewed inventory and role changes | [src/ariba_pam/api/v1/admin.py](../src/ariba_pam/api/v1/admin.py), [tests/test_admin_changes.py](../tests/test_admin_changes.py) |
 | P1-08 | Build the lab portal sign-in and scoped asset catalog | [API checks](../tests/test_portal.py), [Chromium checks](../tests/test_portal_browser.py), [test record](../docs/16-TESTING-STRATEGY.md#lab-implementation-results) |
 | P1-09 | Verify the core platform milestone | [tests/test_workflow.py](../tests/test_workflow.py) (full end-to-end access request, approval, grant issuance, launch, and gateway lifecycle) |
+| P2-01 | Publish independently reviewed asset policies and enforce them during request, approval, and new session authorization | [Policy tests](../tests/test_policies.py), [API contract](../docs/11-API-SPECIFICATION.md#reviewed-asset-policy), [test record](../docs/16-TESTING-STRATEGY.md#lab-implementation-results) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.

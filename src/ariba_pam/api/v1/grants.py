@@ -14,6 +14,7 @@ from ariba_pam.core.scoping import ScopeChecker
 from ariba_pam.core.errors import ForbiddenException, NotFoundException, ConflictException
 from ariba_pam.db.base import generate_id, utc_now, ensure_utc
 from ariba_pam.api.schemas import RevokeGrantInput
+from ariba_pam.services.policies import authorize_revision
 
 router = APIRouter(prefix="/grants", tags=["Grants & Session Launch"])
 
@@ -51,7 +52,7 @@ def get_grant(
     effective_end = ensure_utc(grant.effective_end_at)
     effective_status = grant.status
     if grant.status == "active":
-        if now > effective_end:
+        if now >= effective_end:
             effective_status = "expired"
 
     return {
@@ -63,7 +64,7 @@ def get_grant(
         "effective_start_at": effective_start.isoformat(),
         "effective_end_at": effective_end.isoformat(),
         "status": effective_status,
-        "is_active_window": effective_start <= now <= effective_end,
+        "is_active_window": effective_start <= now < effective_end,
     }
 
 
@@ -90,12 +91,15 @@ def create_session_launch(
     if grant.status != "active":
         raise ConflictException(f"Cannot launch from a {grant.status} grant", code="GRANT_NOT_ACTIVE")
 
-    # Check time window
+    # Check the grant window before re-evaluating the frozen revision.
     now = utc_now()
     effective_start = ensure_utc(grant.effective_start_at)
     effective_end = ensure_utc(grant.effective_end_at)
-    if now < effective_start or now > effective_end:
+    if now < effective_start or now >= effective_end:
         raise ConflictException("Current time is outside the authorized grant window", code="WINDOW_EXPIRED")
+
+    authorize_revision(db, grant.revision)
+    now = utc_now()
 
     # Generate single-use launch token (opaque, random)
     raw_token = f"launch_{secrets.token_urlsafe(32)}"

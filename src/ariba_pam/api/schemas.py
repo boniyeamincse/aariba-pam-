@@ -1,8 +1,8 @@
 """Pydantic schemas for Ariba PAM API."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, field_validator
 
 
 class UserProfileResponse(BaseModel):
@@ -45,10 +45,15 @@ class CreateRequestInput(BaseModel):
 
     asset_id: str
     target_account_id: str
-    requested_start_at: datetime
-    requested_end_at: datetime
+    requested_start_at: AwareDatetime
+    requested_end_at: AwareDatetime
     justification: str = Field(min_length=5)
     ticket_ref: Optional[str] = None
+
+    @field_validator("requested_start_at", "requested_end_at")
+    @classmethod
+    def normalize_window_to_utc(cls, value: datetime) -> datetime:
+        return value.astimezone(timezone.utc)
 
 
 class DecisionInput(BaseModel):
@@ -71,7 +76,7 @@ class AdminProposalInput(BaseModel):
     resource_type: str = Field(pattern="^(asset|role|policy)$")
     resource_id: Optional[str] = None
     change_payload: Dict[str, Any]
-    expected_version: int = 1
+    expected_version: int = Field(default=1, ge=0, strict=True)
     reason: str = Field(min_length=5)
 
 

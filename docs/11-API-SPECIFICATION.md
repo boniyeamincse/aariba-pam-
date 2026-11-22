@@ -42,6 +42,23 @@ Portal calls use an authenticated browser session and require CSRF protection fo
 
 Internal routes authorize by enrolled service identity and assigned zone. A renewal failure never extends the prior deadline. An authenticated control channel can deliver termination instructions promptly. Renewal checks authoritative status even when delivery is delayed.
 
+### Reviewed asset policy
+
+Submit a `policy` change proposal with the asset ID as `resource_id`. Use `expected_version: 0` for the first policy and the current version number for a replacement. The `change_payload` has this form.
+
+~~~json
+{
+  "allowed_target_account_ids": ["account_demo"],
+  "max_duration_seconds": 3600,
+  "required_approvals": 2,
+  "requires_ticket": true
+}
+~~~
+
+The policy requires one to five distinct, ordered approvals. Request duration is limited by both the policy and the target account. The policy or the target account can require a ticket. Applying the proposal requires a different reviewer with scope on the asset, and the existing decision endpoint returns `policy_version_id` and `policy_version` with HTTP 200 for a policy publication. A competing proposal based on the superseded version returns `409 STALE_POLICY_VERSION`.
+
+Submission requires a published policy and returns the `policy_version_id` pinned to the request revision. Approval, launch issuance, and launch consumption verify that this version is still current. A superseded or unversioned revision needs a fresh request. Publishing a replacement does not itself terminate sessions that were already established.
+
 ## Response and validation conventions
 
 - Collection responses provide items and an optional opaque next cursor. Apply resource scope before pagination.

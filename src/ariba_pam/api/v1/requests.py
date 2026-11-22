@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import select
+from sqlalchemy import select, update
 from ariba_pam.db.session import get_db
 from ariba_pam.db.models import User, Asset, TargetAccount, AccessRequest, RequestRevision, ApprovalStep
 from ariba_pam.services.auth import get_current_user
@@ -13,6 +13,7 @@ from ariba_pam.core.scoping import ScopeChecker
 from ariba_pam.core.errors import ForbiddenException, NotFoundException, ConflictException, ValidationException
 from ariba_pam.db.base import generate_id, utc_now
 from ariba_pam.api.schemas import CreateRequestInput
+from ariba_pam.services.policies import authorize_request
 
 router = APIRouter(prefix="/requests", tags=["Access Requests"])
 
@@ -28,9 +29,6 @@ def submit_access_request(
     Submit an access request with an immutable first revision.
     Validates asset availability, account existence, and time window.
     """
-    if payload.requested_end_at <= payload.requested_start_at:
-        raise ValidationException("requested_end_at must follow requested_start_at", code="INVALID_TIME_WINDOW")
-
     # Asset check
     asset = db.get(Asset, payload.asset_id)
     ScopeChecker.assert_asset_scope(current_user, asset)
@@ -42,8 +40,9 @@ def submit_access_request(
     if not account or account.asset_id != asset.id or not account.is_active:
         raise NotFoundException("Target account not found or inactive on target asset", code="ACCOUNT_NOT_FOUND")
 
-    if account.requires_ticket and not payload.ticket_ref:
-        raise ValidationException("Target account requires a valid ticket reference", code="TICKET_REQUIRED")
+    version, rules = authorize_request(
+        db, asset, account, payload.requested_start_at, payload.requested_end_at, payload.ticket_ref
+    )
 
     # Create Request
     req = AccessRequest(
@@ -67,7 +66,7 @@ def submit_access_request(
         requested_end_at=payload.requested_end_at,
         justification=payload.justification,
         ticket_ref=payload.ticket_ref,
-        policy_version_id="pol_v1",
+        policy_version_id=version.id,
         is_frozen=True,
         created_at=utc_now(),
     )
@@ -77,15 +76,17 @@ def submit_access_request(
     # Set current revision ID
     req.current_revision_id = rev.id
 
-    # Create required approval step
-    step = ApprovalStep(
-        id=generate_id("stp"),
-        revision_id=rev.id,
-        step_order=1,
-        status="pending",
-        required_role="approver",
-    )
-    db.add(step)
+    steps = [
+        ApprovalStep(
+            id=generate_id("stp"),
+            revision_id=rev.id,
+            step_order=order,
+            status="pending" if order == 1 else "waiting",
+            required_role="approver",
+        )
+        for order in range(1, rules.required_approvals + 1)
+    ]
+    db.add_all(steps)
     db.flush()
 
     # Record outbox audit event atomically
@@ -97,6 +98,7 @@ def submit_access_request(
         payload={
             "request_id": req.id,
             "revision_id": rev.id,
+            "policy_version_id": version.id,
             "asset_id": asset.id,
             "target_account": account.username,
             "start_at": payload.requested_start_at.isoformat(),
@@ -108,7 +110,8 @@ def submit_access_request(
     return {
         "request_id": req.id,
         "revision_id": rev.id,
-        "step_id": step.id,
+        "step_id": steps[0].id,
+        "policy_version_id": version.id,
         "status": req.status,
     }
 
@@ -178,11 +181,13 @@ def cancel_request(
     if req.requester_id != current_user.id:
         raise ForbiddenException("Only the requester can cancel their request", code="NOT_PERMITTED")
 
-    if req.status != "pending":
-        raise ConflictException(f"Cannot cancel request in {req.status} state", code="INVALID_STATE")
-
-    req.status = "cancelled"
-    req.updated_at = utc_now()
+    cancelled = db.execute(
+        update(AccessRequest)
+        .where(AccessRequest.id == req.id, AccessRequest.status == "pending")
+        .values(status="cancelled", updated_at=utc_now())
+    )
+    if not cancelled.rowcount:
+        raise ConflictException("Only pending requests can be cancelled", code="INVALID_STATE")
 
     AuditService.record_event(
         db=db,

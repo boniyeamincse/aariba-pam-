@@ -5,7 +5,7 @@ from tests.conftest import auth_headers
 from ariba_pam.config import settings
 
 
-def test_full_pam_access_lifecycle(client, seeded_fixtures):
+def test_full_pam_access_lifecycle(client, seeded_fixtures, policy_admin):
     """
     Complete lifecycle verification:
     1. Alice submits access request.
@@ -25,10 +25,11 @@ def test_full_pam_access_lifecycle(client, seeded_fixtures):
     dave = seeded_fixtures["dave"]
     asset_payment = seeded_fixtures["asset_payment"]
     acc_pay_admin = seeded_fixtures["acc_pay_admin"]
+    assert policy_admin.publish(policy_admin.propose()).status_code == 200
 
     now = datetime.now(timezone.utc)
     start_at = now - timedelta(minutes=5)
-    end_at = now + timedelta(hours=1)
+    end_at = now + timedelta(minutes=30)
 
     # 1. Alice submits access request
     req_payload = {

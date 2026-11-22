@@ -3,7 +3,7 @@
 from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import update
 from ariba_pam.db.session import get_db
 from ariba_pam.db.models import User, AdminChangeProposal, Asset, TargetAccount
 from ariba_pam.services.auth import get_current_user
@@ -12,6 +12,12 @@ from ariba_pam.core.errors import ForbiddenException, NotFoundException, Conflic
 from ariba_pam.core.scoping import ScopeChecker
 from ariba_pam.db.base import generate_id, utc_now
 from ariba_pam.api.schemas import AdminProposalInput, AdminProposalDecisionInput
+from ariba_pam.services.policies import (
+    check_expected_version,
+    publish_policy,
+    scoped_policy_asset,
+    validate_proposed_policy,
+)
 
 router = APIRouter(prefix="/admin", tags=["Administration & Change Control"])
 
@@ -27,6 +33,11 @@ def submit_change_proposal(
     user_roles = ScopeChecker.get_user_roles(current_user)
     if "admin" not in user_roles and "operator" not in user_roles:
         raise ForbiddenException("Only administrators or operators can submit change proposals", code="NOT_PERMITTED")
+
+    if payload.resource_type == "policy":
+        asset = scoped_policy_asset(db, payload.resource_id, current_user, ("admin", "operator"))
+        validate_proposed_policy(db, asset, payload.change_payload)
+        check_expected_version(db, asset.id, payload.expected_version)
 
     proposal = AdminChangeProposal(
         id=generate_id("prp"),
@@ -71,6 +82,9 @@ def get_change_proposal(
     proposal = db.get(AdminChangeProposal, proposal_id)
     if not proposal:
         raise NotFoundException("Proposal not found", code="PROPOSAL_NOT_FOUND")
+    if proposal.resource_type == "policy":
+        roles = ("admin", "operator") if proposal.author_id == current_user.id else ("admin", "reviewer")
+        scoped_policy_asset(db, proposal.resource_id, current_user, roles)
 
     return {
         "id": proposal.id,
@@ -102,6 +116,10 @@ def decide_change_proposal(
     if not proposal:
         raise NotFoundException("Proposal not found", code="PROPOSAL_NOT_FOUND")
 
+    asset = None
+    if proposal.resource_type == "policy":
+        asset = scoped_policy_asset(db, proposal.resource_id, current_user, ("admin", "reviewer"), lock=True)
+
     if proposal.status != "pending":
         raise ConflictException(f"Proposal is already {proposal.status}", code="STALE_PROPOSAL")
 
@@ -112,6 +130,19 @@ def decide_change_proposal(
     user_roles = ScopeChecker.get_user_roles(current_user)
     if "admin" not in user_roles and "reviewer" not in user_roles:
         raise ForbiddenException("Only designated reviewers or administrators can review proposals", code="NOT_PERMITTED")
+
+    version = None
+    if asset is not None:
+        # Claim the pending decision in the transaction even on engines without row locks.
+        claimed = db.execute(
+            update(AdminChangeProposal)
+            .where(AdminChangeProposal.id == proposal.id, AdminChangeProposal.status == "pending")
+            .values(reviewed_at=utc_now())
+        )
+        if not claimed.rowcount:
+            raise ConflictException("Proposal has already been reviewed", code="STALE_PROPOSAL")
+        if payload.decision == "applied":
+            version = publish_policy(db, asset, proposal)
 
     proposal.reviewer_id = current_user.id
     proposal.reviewed_at = utc_now()
@@ -149,6 +180,7 @@ def decide_change_proposal(
                         )
                     )
 
+    policy_details = {"policy_version_id": version.id, "policy_version": version.version} if version else {}
     AuditService.record_event(
         db=db,
         event_type=f"ADMIN_PROPOSAL_{proposal.status.upper()}",
@@ -159,6 +191,7 @@ def decide_change_proposal(
             "decision": payload.decision,
             "reason": payload.reason,
             "resource_type": proposal.resource_type,
+            **policy_details,
         },
     )
     db.commit()
@@ -167,4 +200,5 @@ def decide_change_proposal(
         "proposal_id": proposal.id,
         "status": proposal.status,
         "reviewer_id": current_user.id,
+        **policy_details,
     }
