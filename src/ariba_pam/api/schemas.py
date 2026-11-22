@@ -92,3 +92,20 @@ class LaunchConsumeInput(BaseModel):
 
     launch_token: str
     gateway_id: str
+
+
+class ReplaceRevisionInput(BaseModel):
+    """POST /api/v1/requests/{request_id}/revisions payload."""
+
+    expected_revision_id: str
+    target_account_id: Optional[str] = None
+    requested_start_at: Optional[AwareDatetime] = None
+    requested_end_at: Optional[AwareDatetime] = None
+    justification: Optional[str] = Field(default=None, min_length=5)
+    ticket_ref: Optional[str] = None
+
+    @field_validator("requested_start_at", "requested_end_at")
+    @classmethod
+    def normalize_window_to_utc(cls, value: Optional[datetime]) -> Optional[datetime]:
+        return value.astimezone(timezone.utc) if value else None
+

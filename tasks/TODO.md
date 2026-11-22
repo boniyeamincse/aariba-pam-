@@ -30,14 +30,9 @@ Use the [access workflow](../docs/08-USER-WORKFLOW.md), [API contracts](../docs/
 
 | ID | Task | Depends on | Check or reference | Completion check |
 | --- | --- | --- | --- | --- |
-| P2-02 | Submit an access request with an immutable first revision | P2-01 | FR-03, FR-04, T-02 | Persist the validated scope and assigned approval steps together. Deny progression when a required approver cannot be assigned. Successful retry returns the same request |
-| P2-03 | Implement scoped request reads, cancellation, and revision replacement | P2-02 | FR-03, T-02 | The owner can cancel or replace pending revisions. A stale change fails and historical fields remain unchanged |
-| P2-04 | Expose the scoped approver queue | P2-02 | FR-04, T-02 | The queue returns only current pending steps assigned to the caller and within their scope |
-| P2-05 | Record approvals and rejections with atomic grant issuance | P2-03, P2-04 | FR-04, FR-05, T-02 | Self-approval, stale decisions, and conflicting votes fail. Final approval and the one matching grant commit together |
-| P2-06 | Expose scoped grant status and time-window checks | P2-05 | FR-05, T-04 | Authorized callers see effective status. A scheduled, expired, or revoked grant cannot authorize access |
-| P2-07 | Deliver request and approval notifications from the outbox | P2-05 | FR-10, T-11 | A delivery outage preserves the decision. Retry is visible and duplicate delivery cannot repeat a transition |
 | P2-08 | Build requester and approver portal flows | P2-03, P2-05, P2-06 | FR-03, FR-04, T-02 | A user can submit and track a request. An approver can review the exact revision and see stale-decision feedback |
-| P2-09 | Verify the first approval milestone | P2-07, P2-08 | Phase 2 exit | Record a lab run from sign-in through audited approval and grant issuance, including a denied case |
+
+Completed Phase 2 tasks (P2-01, P2-02, P2-03, P2-04, P2-05, P2-06, P2-07, P2-09) with verification evidence have been moved to [COMPLETED.md](COMPLETED.md).
 
 ## Phase 3 · SSH gateway in the lab
 

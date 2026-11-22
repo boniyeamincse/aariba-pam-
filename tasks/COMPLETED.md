@@ -16,5 +16,15 @@
 | P1-08 | Build the lab portal sign-in and scoped asset catalog | [API checks](../tests/test_portal.py), [Chromium checks](../tests/test_portal_browser.py), [test record](../docs/16-TESTING-STRATEGY.md#lab-implementation-results) |
 | P1-09 | Verify the core platform milestone | [tests/test_workflow.py](../tests/test_workflow.py) (full end-to-end access request, approval, grant issuance, launch, and gateway lifecycle) |
 | P2-01 | Publish independently reviewed asset policies and enforce them during request, approval, and new session authorization | [Policy tests](../tests/test_policies.py), [API contract](../docs/11-API-SPECIFICATION.md#reviewed-asset-policy), [test record](../docs/16-TESTING-STRATEGY.md#lab-implementation-results) |
+| P2-02 | Submit an access request with an immutable first revision & policy evaluation | [src/ariba_pam/api/v1/requests.py](../src/ariba_pam/api/v1/requests.py), [tests/test_revisions.py](../tests/test_revisions.py), [tests/test_idempotency.py](../tests/test_idempotency.py) |
+| P2-03 | Implement scoped request reads, cancellation, and revision replacement | [src/ariba_pam/api/v1/requests.py](../src/ariba_pam/api/v1/requests.py), [tests/test_revisions.py](../tests/test_revisions.py) |
+| P2-04 | Expose the scoped approver queue | [src/ariba_pam/api/v1/approvals.py](../src/ariba_pam/api/v1/approvals.py), [tests/test_workflow.py](../tests/test_workflow.py) |
+| P2-05 | Record approvals and rejections with atomic grant issuance | [src/ariba_pam/api/v1/approvals.py](../src/ariba_pam/api/v1/approvals.py), [tests/test_workflow.py](../tests/test_workflow.py) |
+| P2-06 | Expose scoped grant status and time-window checks | [src/ariba_pam/api/v1/grants.py](../src/ariba_pam/api/v1/grants.py), [tests/test_workflow.py](../tests/test_workflow.py) |
+| P2-07 | Deliver request and approval notifications from the outbox with outage resilience | [src/ariba_pam/services/notifications.py](../src/ariba_pam/services/notifications.py), [tests/test_notifications.py](../tests/test_notifications.py) |
+| P2-09 | Verify the first approval milestone | [tests/test_workflow.py](../tests/test_workflow.py), [tests/test_notifications.py](../tests/test_notifications.py) |
+| P3-01 | Start a gateway process with a zone-bound service identity | [gateway/server.go](../gateway/server.go), [gateway/config.go](../gateway/config.go) |
+| P3-04 | Connect to an approved lab host over interactive SSH & verify host identity before authentication | [gateway/hostkey.go](../gateway/hostkey.go), [gateway/gateway_test.go](../gateway/gateway_test.go) |
+| P3-05 | Apply gateway leases and local expiry | [gateway/session.go](../gateway/session.go), [gateway/gateway_test.go](../gateway/gateway_test.go) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.

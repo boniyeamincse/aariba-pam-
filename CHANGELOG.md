@@ -7,6 +7,10 @@
 - Added the lab sign-in and scoped asset catalog at `/portal`, with synthetic fixtures and browser tests.
 - Restricted synthetic sign-in to the lab environment and to pre-enrolled identities.
 - Added independently reviewed per-asset access policies. Request approvals and new session launches now require a current published policy version.
+- Implemented request revision replacement (`POST /api/v1/requests/{request_id}/revisions`) with optimistic locking against stale revisions, and complete request history retrieval (`GET /api/v1/requests/{request_id}`).
+- Implemented transactional idempotency engine (`src/ariba_pam/core/idempotency.py`) supporting `X-Idempotency-Key` and returning HTTP 409 on payload fingerprint conflict.
+- Built outbox notification dispatcher (`src/ariba_pam/services/notifications.py`) ensuring network delivery outages preserve decisions, retry attempts are auditable, and duplicate events are deduplicated.
+- Implemented the Go SSH Gateway service (`gateway/`) with host key fingerprint verification, single-use launch consumption, bounded lease watcher with active renewal, and local lease expiration enforcement.
 
 ### Added
 
