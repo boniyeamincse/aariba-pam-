@@ -55,15 +55,16 @@ Discovery   Core        Workflow    SSH Gateway Credential  Production  Deferred
 - **P4-02**: CA key rollover, revocation lists, and recovery rehearsal (T-06).
 - **P4-03**: Scoped HashiCorp Vault integration for stored-credential targets with automatic post-session rotation.
 
-### Phase 5 · Evidence & Production Pilot [PLANNED]
+### Phase 5 · Evidence & Production Pilot [COMPLETED]
 - **P5-01**: Delivery of audit and session records to independently administered WORM storage (S3 Object Lock).
 - **P5-02**: Asciinema v2 terminal recording capture with SHA256 integrity block digests.
 - **P5-03**: Gateway recording buffer pause/terminate handling on evidence delivery loss (T-07).
 - **P5-04 & P5-05**: Scoped audit search, streaming playback, and auditable evidence exports (T-08).
-- **P5-CONSOLE**: Build the Next.js / TypeScript Enterprise Web Console (`web/`) with Tailwind CSS, `shadcn/ui`, `xterm.js` live web terminal, and `asciinema-player` session replay.
+- **P5-CONSOLE**: Built the Next.js 14 / TypeScript Enterprise Web Console (`web/`) with Tailwind CSS, `shadcn/ui`, `xterm.js` live web terminal, and `asciinema-player` session replay.
 - **P5-06**: SOC alerting and health monitoring integration (T-10).
 - **P5-07 & P5-08**: Backup/restore rehearsal (RTO ≤ 15m, RPO ≤ 1m) and out-of-band emergency break-glass drills (T-09).
-- **P5-10**: Phase 5 production pilot approval review.
+- **P5-09**: Verified capacity, OpenSSH client compatibility, and deployment rollback (T-10).
+- **P5-10**: Phase 5 production pilot approval review & formal ADR-011 acceptance (All T-01 through T-11 verified).
 
 ### Phases 6–8 · Deferred Backlog [FUTURE]
 - **P6-01 & P6-02**: RDP gateway implementation for Windows infrastructure with clipboard and drive restriction.

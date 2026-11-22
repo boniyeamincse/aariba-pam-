@@ -45,6 +45,7 @@
 | P5-07 | Run backup and restore rehearsal | [src/ariba_pam/services/backup.py](../src/ariba_pam/services/backup.py), [src/ariba_pam/api/v1/admin.py](../src/ariba_pam/api/v1/admin.py), [alembic/versions/0005_backup_rehearsals.py](../alembic/versions/0005_backup_rehearsals.py), [tests/test_backup_restore.py](../tests/test_backup_restore.py) |
 | P5-08 | Drill out-of-band emergency access | [src/ariba_pam/services/emergency.py](../src/ariba_pam/services/emergency.py), [src/ariba_pam/api/v1/emergency.py](../src/ariba_pam/api/v1/emergency.py), [alembic/versions/0006_emergency_requests.py](../alembic/versions/0006_emergency_requests.py), [tests/test_emergency_breakglass.py](../tests/test_emergency_breakglass.py) |
 | P5-09 | Verify capacity, client compatibility, and deployment rollback | [gateway/gateway_test.go](../gateway/gateway_test.go), [tests/test_capacity_and_performance.py](../tests/test_capacity_and_performance.py), [tests/test_migration_rollback.py](../tests/test_migration_rollback.py) |
+| P5-10 | Review evidence and approve the limited production pilot | [decisions/architecture-decisions.md](../decisions/architecture-decisions.md) (ADR-011), [tests/test_pilot_readiness.py](../tests/test_pilot_readiness.py) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.
 

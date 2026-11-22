@@ -46,11 +46,7 @@ Completed Phase 4 tasks (P4-01, P4-02) with verification evidence have been move
 
 Use [audit and recovery](../specifications/modules/audit-and-recovery.md), [security event contracts](../specifications/integrations/security-events.md), and the [pilot test catalog](../docs/16-TESTING-STRATEGY.md#pilot-test-catalog).
 
-Completed Phase 5 tasks (P5-01, P5-02, P5-03, P5-04, P5-05, P5-06, P5-07, P5-08, P5-09) have been verified and moved to [COMPLETED.md](COMPLETED.md).
-
-| ID | Task | Depends on | Check or reference | Completion check |
-| --- | --- | --- | --- | --- |
-| P5-10 | Review evidence and approve the limited production pilot | P5-04, P5-05, P5-06, P5-07, P5-08, P5-09, P4-03 for vault-backed targets | Phase 5 exit | Confirm all applicable T-01 through T-11 checks pass. Record approvals from security and infrastructure before enabling approved assets |
+All Phase 5 tasks (P5-01 through P5-10) and their implementation evidence have been completed, verified, and recorded in [COMPLETED.md](COMPLETED.md).
 
 ## Phases 6–8 · Deferred backlog
 
