@@ -33,5 +33,7 @@
 | P3-07 | Propagate IdP disablement to grants and active sessions | [src/ariba_pam/api/v1/auth.py](../src/ariba_pam/api/v1/auth.py), [tests/test_idp_disablement.py](../tests/test_idp_disablement.py) |
 | P3-08 | Reconcile gateway status and show termination progress | [src/ariba_pam/api/internal/gateway.py](../src/ariba_pam/api/internal/gateway.py), [src/ariba_pam/api/v1/sessions.py](../src/ariba_pam/api/v1/sessions.py), [tests/test_idp_disablement.py](../tests/test_idp_disablement.py) |
 | P3-09 | Verify the gateway lab milestone | [tests/test_gateway_milestone.py](../tests/test_gateway_milestone.py), [gateway/gateway_test.go](../gateway/gateway_test.go) |
+| P4-01 | Integrate isolated SSH certificate signing | [src/ariba_pam/services/ca.py](../src/ariba_pam/services/ca.py), [src/ariba_pam/api/internal/gateway.py](../src/ariba_pam/api/internal/gateway.py), [tests/test_ssh_ca.py](../tests/test_ssh_ca.py) |
+| P4-02 | Test CA rollover, revocation, and recovery | [src/ariba_pam/services/ca.py](../src/ariba_pam/services/ca.py), [tests/test_ssh_ca.py](../tests/test_ssh_ca.py) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.

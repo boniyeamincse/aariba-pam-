@@ -109,3 +109,20 @@ class ReplaceRevisionInput(BaseModel):
     def normalize_window_to_utc(cls, value: Optional[datetime]) -> Optional[datetime]:
         return value.astimezone(timezone.utc) if value else None
 
+
+class CertificateSignInput(BaseModel):
+    """Internal gateway POST /internal/v1/sessions/{session_id}/sign-certificate payload."""
+
+    client_public_key: str = Field(min_length=10)
+
+
+class CertificateSignOutput(BaseModel):
+    """Signed certificate response for gateway."""
+
+    certificate: str
+    expires_at: AwareDatetime
+    principal: str
+    serial: int
+    ca_fingerprint: str
+
+

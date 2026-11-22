@@ -9,8 +9,8 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 3 Completed / Phase 4 Active (Credential Custody & Ephemeral SSH CA)
-- **Control Plane Test Health**: `40 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Current Milestone**: Phase 4 Ephemeral SSH CA Completed / Phase 5 Active (Enterprise Web Console)
+- **Control Plane Test Health**: `49 passed, 2 skipped` (`DEBUG=false pytest -v`)
 - **Gateway Test Health**: `3 passed` (`cd gateway && go test -v ./...`)
 - **Database Migration State**: Alembic head (`0002_access_policy_versions.py`)
 - **Security Invariants**: Default Deny, HTTP 404 identifier concealment, Separation of Duties (SoD), Transactional Audit Outbox.
@@ -32,21 +32,36 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 5: Phase 3 Gateway Lab Milestone Verification (`P3-09`) (Current)
+### Session 6: Ephemeral SSH Certificate Authority & CA Rollover (`P4-01` & `P4-02`) (Current)
 - **Date**: 2026-11-22
 - **Completed Work**:
-  1. Created comprehensive end-to-end milestone test suite `tests/test_gateway_milestone.py` verifying:
-     - Full allowed path: Access request -> Multi-step approval -> Grant issuance -> One-time launch token -> Gateway consumption -> Session reservation -> Lease renewal -> Normal termination.
-     - Anti-replay protection (T-04): Consuming a launch token a second time is strictly rejected with `409 Conflict` (`LAUNCH_REPLAY_DENIED`).
-     - Expiry rejection (T-04): Expired launch authorizations are rejected fail-closed with `409 Conflict` (`LAUNCH_EXPIRED`).
-     - Revocation propagation: Security operator grant revocation denies pending launch consumption and halts gateway lease renewals (`SESSION_TERMINATING`).
-     - Mutual secret gateway authentication: Unauthorized requests lacking or with wrong `X-Gateway-Secret` are denied with `401 Unauthorized` (`GATEWAY_UNAUTHORIZED`).
-     - Terminal state immutability: Late gateway events cannot reopen or modify an already ended session.
-     - Transactional audit outbox: Every transition (`SESSION_LAUNCH_CONSUMED`, `GATEWAY_SESSION_EVENT`) generates verified atomic audit logs.
-  2. Updated Phase 3 task records in `tasks/COMPLETED.md` and `tasks/TODO.md` marking Phase 3 100% complete.
+  1. **SSH User CA Service (`src/ariba_pam/services/ca.py`)**:
+     - Built `SSHUserCAService` managing in-memory Ed25519 CA private keys.
+     - Implemented OpenSSH User Certificate signing (`sign_grant_certificate`) enforcing:
+       - Strict principal restriction: only target account username is authorized.
+       - Bounded validity window: max 5 minutes, capped strictly by grant end time.
+       - Deterministic positive 64-bit serial numbers derived from grant ID and timestamp.
+       - Standard extensions: `permit-pty`, `permit-user-rc`.
+     - Built CA key rollover (`rotate_ca_key`) and dual-trust key distribution (`get_trusted_ca_keys`).
+  2. **Internal Gateway API Endpoint (`src/ariba_pam/api/internal/gateway.py`)**:
+     - Added `POST /internal/v1/sessions/{session_id}/sign-certificate`.
+     - Validates active session and active grant window before signing.
+     - Commits atomic audit log: `SSH_CERTIFICATE_ISSUED`.
+  3. **Comprehensive Test Suite (`tests/test_ssh_ca.py`)**:
+     - 9 unit and integration tests covering CA key generation, certificate serialization, shell injection rejection, malformed key rejection, expired grant rejection, key rollover, API lifecycle, and audit outbox verification.
 - **Verified Evidence**:
-  - `DEBUG=false pytest -v`: 40 passed, 2 skipped in 3.22s.
+  - `DEBUG=false pytest -v`: 49 passed, 2 skipped in 3.31s.
   - `cd gateway && go test -v ./...`: 3 passed in 2.01s.
+
+---
+
+### Session 5: Phase 3 Gateway Lab Milestone Verification (`P3-09`)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. Created comprehensive end-to-end milestone test suite `tests/test_gateway_milestone.py` verifying allowed SSH, launch replay protection, expiry, and revocation propagation.
+  2. Marked Phase 3 100% complete.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: 40 passed, 2 skipped.
 
 ---
 
@@ -109,22 +124,19 @@ Every AI agent must follow the rules defined in these configuration files:
 The following tasks are prioritized for execution:
 
 ```
-[Phase 3 Complete ✓] ──► [Phase 4: Ephemeral SSH CA] ──► [Phase 5: Enterprise Web Console]
+[Phase 3 Complete ✓] ──► [Phase 4 Ephemeral CA Complete ✓] ──► [Phase 5: Enterprise Web Console]
 ```
 
-### Priority 1: Ephemeral SSH Certificate Authority (`P4-01` & `P4-02`)
-- **Objective**: Implement isolated SSH User Certificate Authority signing service.
-  - Sign OpenSSH user certificates valid *only* for the remaining grant duration (max 60m) and the approved target account.
-  - Enforce anti-superuser custodian partition: PAM Administrator cannot read private CA key.
-  - Add CA key rollover and recovery test suite.
-- **Target Files**: `src/ariba_pam/services/ca.py`, `tests/test_ssh_ca.py`
-
-### Priority 2: Enterprise Web Console Foundation (`P5-CONSOLE`)
+### Priority 1: Enterprise Web Console Foundation (`P5-CONSOLE`)
 - **Objective**: Scaffold the Next.js 14/15 App Router web application in `web/`.
-  - Install dependencies (`next`, `react`, `typescript`, `tailwindcss`, `shadcn/ui`, `@tanstack/react-query`).
-  - Generate TypeScript API client from `docs/openapi.yaml`.
-  - Build navigation layout and Asset Catalog view.
+  - Initialize `web/` with TypeScript, Tailwind CSS, and shadcn/ui components.
+  - Generate TypeScript API client & types from `docs/openapi.yaml`.
+  - Build core navigation layout and Scoped Asset Catalog view.
 - **Target Directory**: `web/`
+
+### Priority 2: In-Browser Web Terminal & Asciinema Player
+- **Objective**: Integrate `xterm.js` for interactive in-browser SSH sessions and `asciinema-player` for scoped audit playback.
+- **Target Files**: `web/components/terminal.tsx`, `web/components/player.tsx`
 
 ---
 

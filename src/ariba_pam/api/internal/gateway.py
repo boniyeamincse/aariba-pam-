@@ -11,8 +11,9 @@ from ariba_pam.db.models import SessionLaunch, AccessGrant, AccessSession, Asset
 from ariba_pam.services.audit import AuditService
 from ariba_pam.core.errors import ForbiddenException, NotFoundException, ConflictException, UnauthorizedException
 from ariba_pam.db.base import generate_id, utc_now, ensure_utc
-from ariba_pam.api.schemas import LaunchConsumeInput
+from ariba_pam.api.schemas import LaunchConsumeInput, CertificateSignInput, CertificateSignOutput
 from ariba_pam.services.policies import authorize_revision
+from ariba_pam.services.ca import ca_service
 
 router = APIRouter(prefix="/internal/v1", tags=["Internal Gateway Interfaces"])
 
@@ -210,3 +211,77 @@ def record_gateway_event(
     db.commit()
 
     return {"session_id": session.id, "status": session.status}
+
+
+@router.post(
+    "/sessions/{session_id}/sign-certificate",
+    response_model=CertificateSignOutput,
+    status_code=201,
+)
+def sign_session_certificate(
+    session_id: str,
+    payload: CertificateSignInput,
+    x_correlation_id: str = Header(default="corr_gw_cert_sign"),
+    db: Session = Depends(get_db),
+    _gw_auth: None = Depends(verify_gateway_identity),
+):
+    """
+    Gateway requests an ephemeral OpenSSH User Certificate for an active session.
+    Signs certificate restricted strictly to the approved target account and remaining grant time.
+    """
+    session = (
+        db.query(AccessSession)
+        .options(
+            joinedload(AccessSession.grant).joinedload(AccessGrant.target_account),
+        )
+        .filter(AccessSession.id == session_id)
+        .first()
+    )
+    if not session:
+        raise NotFoundException("Session not found", code="SESSION_NOT_FOUND")
+
+    if session.status != "active":
+        raise ConflictException(f"Cannot sign certificate: session is {session.status}", code="SESSION_NOT_ACTIVE")
+
+    grant = session.grant
+    if grant.status != "active":
+        raise ConflictException(f"Cannot sign certificate: grant is {grant.status}", code="GRANT_NOT_ACTIVE")
+
+    now = utc_now()
+    grant_end = ensure_utc(grant.effective_end_at)
+    if now >= grant_end:
+        raise ConflictException("Grant validity window has expired", code="GRANT_EXPIRED")
+
+    target_username = grant.target_account.username
+
+    cert_str, valid_before, serial_int, ca_fp = ca_service.sign_grant_certificate(
+        client_public_key_openssh=payload.client_public_key,
+        principal=target_username,
+        grant_id=grant.id,
+        grant_end_at=grant_end,
+    )
+
+    AuditService.record_event(
+        db=db,
+        event_type="SSH_CERTIFICATE_ISSUED",
+        correlation_id=x_correlation_id,
+        actor_id=session.gateway_id,
+        payload={
+            "session_id": session.id,
+            "grant_id": grant.id,
+            "principal": target_username,
+            "serial": serial_int,
+            "valid_before": valid_before.isoformat(),
+            "ca_fingerprint": ca_fp,
+        },
+    )
+    db.commit()
+
+    return CertificateSignOutput(
+        certificate=cert_str,
+        expires_at=valid_before,
+        principal=target_username,
+        serial=serial_int,
+        ca_fingerprint=ca_fp,
+    )
+

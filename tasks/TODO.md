@@ -38,9 +38,9 @@ All Phase 3 tasks (P3-01 through P3-09) and their implementation evidence have b
 
 | ID | Task | Depends on | Check or reference | Completion check |
 | --- | --- | --- | --- | --- |
-| P4-01 | Integrate isolated SSH certificate signing | P3-09 | FR-06, SEC-05, T-06 | The signer issues only for the approved target account and remaining grant window. The gateway cannot read the CA key |
-| P4-02 | Test CA rollover, revocation, and recovery | P4-01 | SEC-05, T-06 | Document and verify the custody and recovery procedure with representative lab hosts |
 | P4-03 | Add scoped vault-backed target access when required | P4-01, approved vault need from P0-03 | FR-06, SEC-05, T-06 | Verify scoped secret use, non-disclosure, rotation, and recovery before onboarding any stored-credential target |
+
+Completed Phase 4 tasks (P4-01, P4-02) with verification evidence have been moved to [COMPLETED.md](COMPLETED.md).
 
 ## Phase 5 · Evidence and production pilot
 
