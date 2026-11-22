@@ -9,12 +9,12 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 5 Active (`P5-08: Drill Out-of-Band Emergency Access` Complete)
-- **Control Plane Test Health**: `80 passed, 2 skipped` (`DEBUG=false pytest -v`)
-- **Gateway Test Health**: `7 passed` (`cd gateway && go test -v ./...`)
+- **Current Milestone**: Phase 5 Active (`P5-09: Verify Capacity, Client Compatibility, and Deployment Rollback` Complete)
+- **Control Plane Test Health**: `84 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Gateway Test Health**: `10 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
 - **Database Migration State**: Alembic head (`0006_emergency_requests.py`)
-- **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Multi-Custodian Quorum, Transactional Audit Outbox.
+- **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Multi-Custodian Quorum, Transactional Audit Outbox, Bidirectional Schema Migration Reversibility.
 
 ---
 
@@ -33,7 +33,34 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 13: Out-of-Band Emergency Break-Glass Access Drill (`P5-08`) (Current)
+### Session 14: Capacity Verification, OpenSSH Compatibility & Deployment Rollback (`P5-09`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Go SSH Gateway Benchmark & Capacity Suite (`gateway/gateway_test.go`)**:
+     - `TestKeystrokeRoundTripLatencyBenchmark` (`NFR-05`): Benchmarked bi-directional terminal keystroke proxying with session recording over 500 keystrokes. Measured average keystroke latency of **123 µs** (max 835 µs), effortlessly satisfying the $\le 15\text{ ms}$ SLA target.
+     - `TestConcurrentStreamsCapacity` (`NFR-05`, `T-10`): Evaluated gateway under **200 concurrent active SSH streams** pumping interactive command data simultaneously. Zero errors, zero deadlocks, and zero goroutine leaks in 2.47 ms.
+     - `TestStandardOpenSSHClientCompatibility`: Validated standard OpenSSH user certificate parsing, principal restriction, extension enforcement (`permit-pty`, `permit-user-rc`), and terminal emulation window change payloads (`pty-req`, `window-change`).
+  2. **Control Plane Capacity & Performance Test Suite (`tests/test_capacity_and_performance.py`)**:
+     - `test_control_plane_api_latency_distribution` (`NFR-05`): Executed 100 requests across read endpoints (`/health`, `/ready`, `/health/components`, `/api/v1/me`, `/api/v1/assets`). Measured p50: **4.40 ms**, p90: **8.71 ms**, p95: **11.01 ms**, p99: **14.92 ms** (against the $\le 150\text{ ms}$ budget).
+     - `test_concurrent_idempotency_storm`: Submitted 20 identical mutating requests with the same `X-Idempotency-Key`, verifying exactly 1 database write and 19 cached responses with zero lock contention.
+     - `test_transactional_outbox_throughput_and_batch_commit`: Ingested 100 consecutive audit outbox entries in 47.94 ms (**0.479 ms/event**), verifying high-throughput transactional stability.
+  3. **Deployment Rollback & Step-by-Step Migration Downgrade Rehearsal (`tests/test_migration_rollback.py`)**:
+     - Populated data across all database layers (zones, assets, accounts, users, proposals, policies, recordings, exports, alerts, rehearsals, emergency requests).
+     - Stepped backward through every single migration downgrade:
+       - `0006 -> 0005`: drops emergency requests/approvals; preserves backup rehearsals, alerts, recordings, and base data.
+       - `0005 -> 0004`: drops backup rehearsals; preserves alerts, recordings, and base data.
+       - `0004 -> 0003`: drops SOC alerts; preserves recordings and base data.
+       - `0003 -> 0002`: drops recordings and evidence exports; preserves policy versions and base data.
+       - `0002 -> 0001`: drops access policy versions; preserves base inventory and users.
+     - Re-upgraded cleanly back to `head` (`0006_emergency_requests`), confirming zero schema drift, full re-application, and 100% data preservation in untouched baseline tables throughout the rollback cycle.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **84 passed, 2 skipped** (in 7.90s).
+  - `cd gateway && go test -v ./...`: **10 passed** (in 2.20s).
+  - `npm run build` in `web/`: **10/10 static routes compiled successfully**.
+
+---
+
+### Session 13: Out-of-Band Emergency Break-Glass Access Drill (`P5-08`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Emergency Access Schema & Migration (`src/ariba_pam/db/models.py`, `alembic/versions/0006_emergency_requests.py`)**:

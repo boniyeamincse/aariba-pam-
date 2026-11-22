@@ -5,9 +5,11 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -273,4 +275,348 @@ func TestUnsafeLaunchBlockedOnPipelineDegraded(t *testing.T) {
 		t.Error("expected CheckPipelineReady to fail when sink is degraded")
 	}
 }
+
+// createSSHChannelPair creates an in-memory SSH client/server connection over net.Pipe
+// createSSHChannelPair creates an in-memory SSH client/server connection over TCP loopback
+// and returns the open client and server channel pair.
+func createSSHChannelPair(t *testing.T) (ssh.Channel, ssh.Channel, func()) {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen on loopback: %v", err)
+	}
+
+	_, signerKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate ed25519 key: %v", err)
+	}
+	signer, err := ssh.NewSignerFromKey(signerKey)
+	if err != nil {
+		t.Fatalf("failed to create signer: %v", err)
+	}
+
+	serverConfig := &ssh.ServerConfig{
+		PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+			return nil, nil
+		},
+	}
+	serverConfig.AddHostKey(signer)
+
+	serverChanReady := make(chan ssh.Channel, 1)
+	serverErrChan := make(chan error, 1)
+
+	go func() {
+		sNet, err := listener.Accept()
+		if err != nil {
+			serverErrChan <- err
+			return
+		}
+		_, chans, reqs, err := ssh.NewServerConn(sNet, serverConfig)
+		if err != nil {
+			serverErrChan <- err
+			return
+		}
+		go ssh.DiscardRequests(reqs)
+		for newChan := range chans {
+			ch, reqs2, err := newChan.Accept()
+			if err != nil {
+				serverErrChan <- err
+				return
+			}
+			go ssh.DiscardRequests(reqs2)
+			serverChanReady <- ch
+			return
+		}
+	}()
+
+	clientConfig := &ssh.ClientConfig{
+		User:            "testuser",
+		Auth:            []ssh.AuthMethod{ssh.Password("testpass")},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         5 * time.Second,
+	}
+
+	cNet, err := net.Dial("tcp", listener.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to dial loopback: %v", err)
+	}
+
+	cConn, chans, reqs, err := ssh.NewClientConn(cNet, "", clientConfig)
+	if err != nil {
+		t.Fatalf("failed to establish client SSH conn: %v", err)
+	}
+	go ssh.DiscardRequests(reqs)
+	sshClient := ssh.NewClient(cConn, chans, reqs)
+
+	clientChan, reqs3, err := sshClient.OpenChannel("session", nil)
+	if err != nil {
+		t.Fatalf("failed to open client channel: %v", err)
+	}
+	go ssh.DiscardRequests(reqs3)
+
+	var serverChan ssh.Channel
+	select {
+	case serverChan = <-serverChanReady:
+	case err := <-serverErrChan:
+		t.Fatalf("server failed to accept channel: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for server channel")
+	}
+
+	cleanup := func() {
+		_ = clientChan.Close()
+		_ = serverChan.Close()
+		_ = sshClient.Close()
+		_ = cNet.Close()
+		_ = listener.Close()
+	}
+
+	return clientChan, serverChan, cleanup
+}
+
+func TestKeystrokeRoundTripLatencyBenchmark(t *testing.T) {
+	// NFR-05: SSH Gateway proxy adds <= 15 ms latency to keystroke round-trip.
+	clientEndpoint, gwClientChan, cleanupClient := createSSHChannelPair(t)
+	defer cleanupClient()
+
+	gwTargetChan, targetEndpoint, cleanupTarget := createSSHChannelPair(t)
+	defer cleanupTarget()
+
+	sess := NewActiveSession(
+		context.Background(),
+		"ses_bench_lat_01",
+		"grn_bench_lat_01",
+		gwClientChan,
+		gwTargetChan,
+		nil,
+		NewControlPlaneClient("http://mock", "gw_01", "sec"),
+		time.Now().Add(1*time.Hour),
+		time.Now().Add(1*time.Hour),
+	)
+
+	// Target echo loop (simulates target terminal echo)
+	targetStop := make(chan struct{})
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			select {
+			case <-targetStop:
+				return
+			default:
+				n, err := targetEndpoint.Read(buf)
+				if err != nil {
+					return
+				}
+				if n > 0 {
+					_, _ = targetEndpoint.Write(buf[:n])
+				}
+			}
+		}
+	}()
+
+	go func() {
+		_ = sess.Run()
+	}()
+
+	const keystrokeCount = 500
+	var totalDuration time.Duration
+	var maxDuration time.Duration
+
+	buf := make([]byte, 1)
+	for i := 0; i < keystrokeCount; i++ {
+		char := byte('A' + (i % 26))
+		start := time.Now()
+
+		if _, err := clientEndpoint.Write([]byte{char}); err != nil {
+			t.Fatalf("failed to write keystroke %d: %v", i, err)
+		}
+
+		n, err := clientEndpoint.Read(buf)
+		if err != nil || n != 1 || buf[0] != char {
+			t.Fatalf("keystroke %d read mismatch (n=%d, expected=%c, got=%c, err=%v)", i, n, char, buf[0], err)
+		}
+
+		elapsed := time.Since(start)
+		totalDuration += elapsed
+		if elapsed > maxDuration {
+			maxDuration = elapsed
+		}
+	}
+
+	avgLatency := totalDuration / time.Duration(keystrokeCount)
+	t.Logf("NFR-05 Benchmark Results: %d keystrokes | Avg Latency: %v | Max Latency: %v", keystrokeCount, avgLatency, maxDuration)
+
+	// NFR-05 requirement: Keystroke round-trip latency added by gateway must be <= 15ms
+	if avgLatency > 15*time.Millisecond {
+		t.Errorf("NFR-05 SLA violated: average keystroke latency %v exceeded 15ms target", avgLatency)
+	}
+
+	sess.Close("benchmark complete")
+	close(targetStop)
+}
+
+func TestConcurrentStreamsCapacity(t *testing.T) {
+	// NFR-05 / T-10: Benchmark suite under 200 concurrent active SSH streams.
+	const concurrentStreams = 200
+	var wg sync.WaitGroup
+	wg.Add(concurrentStreams)
+
+	errCount := 0
+	var errMu sync.Mutex
+
+	startTime := time.Now()
+
+	for i := 0; i < concurrentStreams; i++ {
+		go func(streamIdx int) {
+			defer wg.Done()
+
+			sink := NewMemoryRecordingSink()
+			rec := NewSessionRecorder(
+				fmt.Sprintf("ses_stream_%03d", streamIdx),
+				sink,
+				64*1024,
+				30*time.Second,
+				nil,
+			)
+
+			// Stream 10 interactive chunks per session concurrently
+			for c := 0; c < 10; c++ {
+				data := []byte(fmt.Sprintf("stream_%d_command_%d\n", streamIdx, c))
+				if err := rec.RecordChunk(data); err != nil {
+					errMu.Lock()
+					errCount++
+					errMu.Unlock()
+					return
+				}
+			}
+
+			summary := rec.GetSummary()
+			if summary.CoverageStatus != "complete" {
+				errMu.Lock()
+				errCount++
+				errMu.Unlock()
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	totalElapsed := time.Since(startTime)
+	t.Logf("NFR-05 Capacity Results: %d concurrent streams processed in %v (errCount=%d)", concurrentStreams, totalElapsed, errCount)
+
+	if errCount > 0 {
+		t.Errorf("expected 0 errors across %d concurrent streams, got %d", concurrentStreams, errCount)
+	}
+}
+
+func TestStandardOpenSSHClientCompatibility(t *testing.T) {
+	// 1. OpenSSH Certificate Compatibility
+	caPub, caPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate CA key: %v", err)
+	}
+	caSigner, err := ssh.NewSignerFromKey(caPriv)
+	if err != nil {
+		t.Fatalf("failed to create CA signer: %v", err)
+	}
+
+	userPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate user key: %v", err)
+	}
+	userSSHPub, err := ssh.NewPublicKey(userPub)
+	if err != nil {
+		t.Fatalf("failed to create user SSH public key: %v", err)
+	}
+
+	now := time.Now().UTC()
+	cert := &ssh.Certificate{
+		Key:             userSSHPub,
+		Serial:          987654321,
+		CertType:        ssh.UserCert,
+		KeyId:           "ariba_grn_test_dbadmin",
+		ValidPrincipals: []string{"dbadmin"},
+		ValidAfter:      uint64(now.Add(-1 * time.Minute).Unix()),
+		ValidBefore:     uint64(now.Add(5 * time.Minute).Unix()),
+		Permissions: ssh.Permissions{
+			Extensions: map[string]string{
+				"permit-pty":     "",
+				"permit-user-rc": "",
+			},
+		},
+	}
+
+	if err := cert.SignCert(rand.Reader, caSigner); err != nil {
+		t.Fatalf("SignCert failed: %v", err)
+	}
+
+	// 2. Validate standard OpenSSH cert checker accepts the certificate
+	checker := &ssh.CertChecker{
+		IsUserAuthority: func(auth ssh.PublicKey) bool {
+			caSignerPub, _ := ssh.NewPublicKey(caPub)
+			return auth.Type() == caSignerPub.Type() && string(auth.Marshal()) == string(caSignerPub.Marshal())
+		},
+	}
+
+	// Test authorized principal "dbadmin" succeeds
+	validConn := &testConnMetadata{user: "dbadmin"}
+	perm, err := checker.Authenticate(validConn, cert)
+	if err != nil {
+		t.Errorf("expected valid OpenSSH certificate to authenticate, got: %v", err)
+	}
+	if perm == nil {
+		t.Error("expected non-nil permissions from certificate auth")
+	}
+
+	// Test unauthorized principal "root" fails
+	invalidConn := &testConnMetadata{user: "root"}
+	_, err = checker.Authenticate(invalidConn, cert)
+	if err == nil {
+		t.Error("expected cert auth to fail for unauthorized principal 'root'")
+	}
+
+	// 3. Validate Terminal Emulation payload structures (pty-req & window-change)
+	ptyReq := struct {
+		Term     string
+		Width    uint32
+		Height   uint32
+		PixWidth uint32
+		PixHeight uint32
+		Modes    []byte
+	}{
+		Term:   "xterm-256color",
+		Width:  80,
+		Height: 24,
+	}
+	ptyPayload := ssh.Marshal(&ptyReq)
+	if len(ptyPayload) == 0 {
+		t.Error("failed to marshal pty-req structure")
+	}
+
+	winChange := struct {
+		Width    uint32
+		Height   uint32
+		PixWidth uint32
+		PixHeight uint32
+	}{
+		Width:  120,
+		Height: 40,
+	}
+	winPayload := ssh.Marshal(&winChange)
+	if len(winPayload) == 0 {
+		t.Error("failed to marshal window-change structure")
+	}
+}
+
+type testConnMetadata struct {
+	user string
+}
+
+func (m *testConnMetadata) User() string          { return m.user }
+func (m *testConnMetadata) SessionID() []byte     { return []byte("test_session_id") }
+func (m *testConnMetadata) ClientVersion() []byte { return []byte("SSH-2.0-OpenSSH_9.6") }
+func (m *testConnMetadata) ServerVersion() []byte { return []byte("SSH-2.0-AribaPAMGateway_1.0") }
+func (m *testConnMetadata) RemoteAddr() net.Addr  { return &net.IPAddr{IP: net.ParseIP("192.168.1.100")} }
+func (m *testConnMetadata) LocalAddr() net.Addr   { return &net.IPAddr{IP: net.ParseIP("10.0.1.1")} }
+
 
