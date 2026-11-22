@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any
 from fastapi import Header, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from ariba_pam.config import settings
 from ariba_pam.db.session import get_db
 from ariba_pam.db.models import User
 from ariba_pam.core.security import verify_session_token, create_session_token
@@ -15,30 +16,23 @@ class AuthService:
     """Manages workforce authentication, session creation, and identity checks."""
 
     @staticmethod
-    def authenticate_assertion(
+    def authenticate_lab_identity(
         db: Session,
         idp_issuer: str,
         idp_subject: str,
         email: str,
-        full_name: str,
         amr: list,
         correlation_id: str,
     ) -> Dict[str, Any]:
-        """Validate IdP assertion and return active user and signed session token."""
-        # Find user by IdP identity
+        """Look up a pre-enrolled synthetic identity and issue a lab session."""
+        if settings.environment != "lab" or idp_issuer != settings.idp_issuer:
+            raise UnauthorizedException("Identity not recognized or not enrolled", code="UNKNOWN_IDENTITY")
+
         stmt = select(User).where(User.idp_issuer == idp_issuer, User.idp_subject == idp_subject)
         user = db.scalar(stmt)
 
-        if not user:
-            # Check by email for initial onboarding in pilot
-            email_stmt = select(User).where(User.email == email)
-            user = db.scalar(email_stmt)
-            if not user:
-                raise UnauthorizedException("Identity not recognized or not enrolled", code="UNKNOWN_IDENTITY")
-            # Update IdP issuer and subject
-            user.idp_issuer = idp_issuer
-            user.idp_subject = idp_subject
-            db.commit()
+        if not user or user.email != email:
+            raise UnauthorizedException("Identity not recognized or not enrolled", code="UNKNOWN_IDENTITY")
 
         if not user.is_active:
             raise UnauthorizedException("User account is disabled", code="ACCOUNT_DISABLED")

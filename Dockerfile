@@ -6,9 +6,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
+COPY pyproject.toml README.md ./
+COPY src ./src
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -e .
+    pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels .
 
 FROM python:3.12-slim AS runner
 
@@ -20,7 +21,6 @@ RUN useradd -u 10001 -m -s /bin/sh appuser
 COPY --from=builder /app/wheels /wheels
 RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
-COPY src /app/src
 COPY alembic /app/alembic
 COPY alembic.ini /app/alembic.ini
 

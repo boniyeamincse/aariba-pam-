@@ -11,6 +11,7 @@ from ariba_pam.config import settings
 from ariba_pam.core.errors import PAMException
 from ariba_pam.db.session import engine, create_all_tables
 from ariba_pam.api.router import api_v1_router, internal_router
+from ariba_pam.portal import router as portal_router
 
 
 @asynccontextmanager
@@ -104,3 +105,4 @@ def readiness_check():
 # Mount routers
 app.include_router(api_v1_router)
 app.include_router(internal_router)
+app.include_router(portal_router)

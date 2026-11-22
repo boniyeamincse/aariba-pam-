@@ -1,9 +1,11 @@
 """Authentication and identity routes."""
 
 from typing import Dict, Any
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Response
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from ariba_pam.config import settings
+from ariba_pam.core.errors import NotFoundException
 from ariba_pam.db.session import get_db
 from ariba_pam.db.models import User
 from ariba_pam.services.auth import AuthService, get_current_user
@@ -14,28 +16,31 @@ router = APIRouter(tags=["Authentication & Identity"])
 
 class SyntheticLoginInput(BaseModel):
     email: str
-    idp_issuer: str = "https://idp.lab.ariba.internal"
+    idp_issuer: str | None = None
     idp_subject: str
-    full_name: str = "Synthetic Lab User"
-    amr: list = ["pwd", "fido2"]
+    amr: list[str] = Field(default_factory=lambda: ["pwd", "fido2"])
 
 
 @router.post("/auth/login", response_model=Dict[str, Any])
 def synthetic_login(
     payload: SyntheticLoginInput,
+    response: Response,
     x_correlation_id: str = Header(default="corr_synthetic_login"),
     db: Session = Depends(get_db),
 ):
     """Synthetic IdP login endpoint for the lab environment."""
-    result = AuthService.authenticate_assertion(
+    if settings.environment != "lab":
+        raise NotFoundException("Login endpoint not found")
+
+    result = AuthService.authenticate_lab_identity(
         db=db,
-        idp_issuer=payload.idp_issuer,
+        idp_issuer=settings.idp_issuer if payload.idp_issuer is None else payload.idp_issuer,
         idp_subject=payload.idp_subject,
         email=payload.email,
-        full_name=payload.full_name,
         amr=payload.amr,
         correlation_id=x_correlation_id,
     )
+    response.headers["Cache-Control"] = "no-store"
     return {
         "access_token": result["token"],
         "token_type": "bearer",

@@ -12,6 +12,8 @@
 
 Keep request, grant, and session status distinct in the interface. Show the access window with a timezone and display expiry during the terminal session. Mark a termination as pending until the gateway confirms it. When mandatory recording pauses the terminal, explain why input is paused and whether the session has ended. Provide a clear recording notice before launch.
 
+The lab portal at `/portal` currently covers sign-in and the asset catalog. It renders the control API's scoped results and handles loading, empty, denied, unavailable, and expired-session states. The browser keeps its lab token in memory and clears displayed inventory on sign-out. See the [local setup](../README.md#start-the-lab-portal).
+
 ## Screen states and recovery
 
 | Screen | State | User action or feedback |

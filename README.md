@@ -2,7 +2,7 @@
 
 Ariba PAM is a planned privileged access management platform for controlling and auditing time-limited access to enterprise infrastructure. The first delivery path covers requester identity, approval, policy enforcement, and gateway-mediated Linux SSH.
 
-This repository contains the product and engineering baseline. The runtime, deployment configuration, and pilot test evidence will be added as implementation progresses.
+This repository contains the product and engineering baseline, a Python control plane, and an isolated lab portal.
 
 ## Read the documents in order
 
@@ -52,17 +52,29 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Run full test suite
-pytest -v
+DEBUG=false pytest -v
 ```
 
-### Starting Control Plane
-```bash
-# Run migrations
+### Start the lab portal
+
+~~~bash
+export ENVIRONMENT=lab DEBUG=false
 alembic upgrade head
+python -m ariba_pam.lab_seed
+uvicorn ariba_pam.main:app --host 127.0.0.1 --port 8000
+~~~
 
-# Start API service
-uvicorn ariba_pam.main:app --host 0.0.0.0 --port 8000
-```
+Use only synthetic data in this local lab. Sign in with synthetic email `catalog-demo@example.test` and subject `catalog-demo` to see the scoped inventory. Use `catalog-empty@example.test` and `catalog-empty` to see the empty state. Production sign-in requires the approved enterprise IdP. [Open the lab portal](http://127.0.0.1:8000/portal).
+
+To run the browser checks, install the optional browser dependencies and Chromium.
+
+~~~bash
+pip install -e '.[dev,browser]'
+python -m playwright install chromium
+DEBUG=false python -m pytest tests/test_portal.py tests/test_portal_browser.py
+~~~
+
+Set `PAM_TEST_CHROMIUM` to use an existing Chromium executable instead of the Playwright-managed installation.
 
 ### Running with Docker Compose
 ```bash

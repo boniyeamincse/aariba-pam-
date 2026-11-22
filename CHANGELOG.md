@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added the lab sign-in and scoped asset catalog at `/portal`, with synthetic fixtures and browser tests.
+- Restricted synthetic sign-in to the lab environment and to pre-enrolled identities.
+
+### Added
+
 - Scaffolding for Ariba PAM FastAPI control plane service and configuration (`ariba_pam.config`, `ariba_pam.main`).
 - Full relational schema in SQLAlchemy 2.0 (`User`, `Role`, `RoleAssignment`, `Asset`, `TargetAccount`, `AccessRequest`, `RequestRevision`, `ApprovalStep`, `ApprovalDecision`, `AccessGrant`, `SessionLaunch`, `AccessSession`, `AuditOutbox`, `AdminChangeProposal`, `IdempotencyRecord`).
 - Alembic migration runner and initial migration `0001_initial_schema`.

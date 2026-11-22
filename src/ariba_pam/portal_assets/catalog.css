@@ -1,0 +1,77 @@
+:root {
+  font: 16px/1.5 system-ui, sans-serif;
+  color: #192a36;
+  background: #f3f6f8;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+h1, h2, p { margin: 0; }
+h1 { font-size: clamp(2rem, 6vw, 3rem); letter-spacing: -.04em; }
+h2 { font-size: 1.2rem; }
+
+.bar { background: #132631; color: #f5fbfc; }
+.bar-content, main { width: min(70rem, calc(100% - 2.5rem)); margin: auto; }
+.bar-content, .page-heading, .catalog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.bar-content { min-height: 4rem; }
+.brand { font-size: 1.25rem; }
+.brand strong { color: #9ae1d4; }
+.environment { color: #d4e5ec; font-size: .875rem; }
+main { padding-block: 3rem; }
+.page-heading { margin-bottom: 1.5rem; }
+.page-heading p, .catalog-header p { color: #475c69; overflow-wrap: anywhere; }
+
+.panel {
+  background: #fff;
+  border: 1px solid #cedae0;
+  border-radius: .75rem;
+  padding: clamp(1rem, 3vw, 1.75rem);
+}
+.sign-in { max-width: 31rem; }
+form { display: grid; gap: 1rem; margin-top: 1rem; }
+label { display: block; margin-bottom: .3rem; font-weight: 600; }
+
+input, button {
+  font: inherit;
+  border: 1px solid #687e8b;
+  border-radius: .4rem;
+  padding: .55rem .8rem;
+}
+input { width: 100%; color: inherit; background: #fff; }
+button { width: fit-content; background: #176557; color: #fff; border-color: #176557; cursor: pointer; }
+button.secondary { background: #fff; color: #204c48; border-color: #688580; }
+button:disabled { opacity: .58; cursor: wait; }
+:focus-visible { outline: 3px solid #087b70; outline-offset: 3px; }
+
+.status { margin-block: 1rem; color: #3e515d; }
+.status:empty { margin: 0; }
+.status[data-error="true"] { color: #902b20; }
+
+#assets {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: .75rem;
+}
+#assets:empty { margin: 0; }
+.asset {
+  border: 1px solid #cfdee3;
+  background: #f7fafb;
+  border-radius: .5rem;
+  padding: 1rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.asset h3 { margin: 0 0 .2rem; font-size: 1rem; }
+.asset p { color: #475c69; font-size: .9rem; }
+.asset ul { margin-top: .6rem; padding-inline-start: 1.2rem; }

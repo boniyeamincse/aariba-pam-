@@ -49,6 +49,15 @@ Capture environment, build, data fixtures, expected result, observed timing, out
 | Run ID | Test and requirements | Build and environment | Expected outcome | Observed outcome and timing | Result | Evidence and reviewer |
 | --- | --- | --- | --- | --- | --- | --- |
 
-The current baseline defines planned checks. Runtime test results will be recorded against the corresponding implementation build. Documentation checks cover references and consistency across requirements, contracts, and tests.
+The pilot catalog defines planned checks. Record implementation results below as each task lands.
+
+## Lab implementation results
+
+| Run ID | Scope | Environment | Observed result | Evidence |
+| --- | --- | --- | --- | --- |
+| LAB-P1-08 | Portal sign-in and scoped catalog under FR-01 and FR-02 | Python 3.14, SQLite, Playwright and Chromium, synthetic identities · 2026-11-22 | 23 tests passed, including both browser cases. Verified permitted inventory, loading, empty and denied states, sign-out, and expired-session handling | [API checks](../tests/test_portal.py), [browser checks](../tests/test_portal_browser.py) |
+| LAB-P1-08-PACKAGE | Local installation and fixture smoke check | Package wheel and temporary SQLite database · 2026-11-22 | Wheel contains all three portal files. Applied the migration and ran the seed twice successfully | [Local setup](../README.md#start-the-lab-portal) |
+
+These runs verify synthetic lab behavior. T-01 and T-10 still require the approved pilot identity provider, runtime, and pilot test evidence.
 
 See [pilot targets](05-NON-FUNCTIONAL-REQUIREMENTS.md) and [security mapping](13-SECURITY-REQUIREMENTS.md).

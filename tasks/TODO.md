@@ -22,11 +22,7 @@ The identifiers below refer to [functional requirements](../docs/04-FUNCTIONAL-R
 
 Detailed design lives in the [control plane module](../specifications/modules/control-plane.md), [database design](../docs/10-DATABASE-DESIGN.md), and [Docker strategy](../docs/15-DOCKER-STRATEGY.md).
 
-| ID | Task | Depends on | Check or reference | Completion check |
-| --- | --- | --- | --- | --- |
-| P1-08 | Build the portal sign-in and asset catalog | P1-03, P1-06 | FR-01, FR-02, T-10 | A signed-in user can browse only permitted assets. Loading, empty, and denied states are verified |
-
-Completed Phase 1 backend tasks (P1-01, P1-02, P1-03, P1-04, P1-05, P1-06, P1-07, P1-09) with verification evidence have been moved to [COMPLETED.md](COMPLETED.md).
+Phase 1 tasks and their implementation evidence are listed in [COMPLETED.md](COMPLETED.md).
 
 ## Phase 2 · Requests, approvals, and grants
 

@@ -13,6 +13,7 @@
 | P1-05 | Implement transactional audit outbox and durable local delivery test | [src/ariba_pam/services/audit.py](../src/ariba_pam/services/audit.py), [tests/test_audit_outbox.py](../tests/test_audit_outbox.py) |
 | P1-06 | Add scoped asset and target-account inventory reads | [src/ariba_pam/api/v1/assets.py](../src/ariba_pam/api/v1/assets.py), [tests/test_inventory.py](../tests/test_inventory.py) |
 | P1-07 | Add independently reviewed inventory and role changes | [src/ariba_pam/api/v1/admin.py](../src/ariba_pam/api/v1/admin.py), [tests/test_admin_changes.py](../tests/test_admin_changes.py) |
+| P1-08 | Build the lab portal sign-in and scoped asset catalog | [API checks](../tests/test_portal.py), [Chromium checks](../tests/test_portal_browser.py), [test record](../docs/16-TESTING-STRATEGY.md#lab-implementation-results) |
 | P1-09 | Verify the core platform milestone | [tests/test_workflow.py](../tests/test_workflow.py) (full end-to-end access request, approval, grant issuance, launch, and gateway lifecycle) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.
