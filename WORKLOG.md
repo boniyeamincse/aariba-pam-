@@ -9,8 +9,8 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Complete (`P7-01` to `P7-04` Complete) · Phase 8 Active (`P8-01: Validate control-plane and gateway failover` Complete · `P8-02: Exercise rolling upgrades and rollback` Next)
-- **Control Plane Test Health**: `148 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Complete (`P7-01` to `P7-04` Complete) · Phase 8 Active (`P8-01` & `P8-02` Complete · `P8-03: Test recovery at the approved expanded capacity` Next)
+- **Control Plane Test Health**: `153 passed, 2 skipped` (`DEBUG=false pytest -v`)
 - **Gateway Test Health**: `17 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
 - **Database Migration State**: Alembic head (`0008_rdp_support.py`)
@@ -33,7 +33,35 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 23: Multi-Node Control Plane Failover, Zone-Redundant Gateway Redundancy & HA Validation (`P8-01`) (Current)
+### Session 24: Zero-Downtime Rolling Upgrades, Expand/Contract Schema Evolution & Rollback Under Load (`P8-02`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:
+     - Documented `ADR-018: Zero-Downtime Rolling Upgrades, Compatible Schema Evolution, and Rollback Under Load`.
+     - Specified Expand/Contract database migration pattern for non-breaking, additive schema evolution (new columns nullable or default, no immediate drop/rename without deprecation releases), ensuring concurrent compatibility with Version $N$ and Version $N+1$ binaries.
+  2. **Database Schema Documentation (`docs/05-DATABASE-SCHEMA.md`)**:
+     - Added Section 4 detailing Expand/Contract phases, dual-version compatibility invariants, rolling node drain sequence, and bidirectional Alembic migration reversibility.
+  3. **Rolling Upgrade & Rollback Domain Service (`src/ariba_pam/services/upgrade.py`)**:
+     - Built `RollingUpgradeService` with:
+       - Node upgrade state tracking (`active`, `draining`, `upgrading`, `active_v2`, `rolled_back`).
+       - Expand/Contract schema compatibility validator (rejects immediate column drops, renames, and NOT NULL columns lacking server-side defaults).
+       - Rolling upgrade simulation runner: drains node 1, shifts traffic to node 2, upgrades node 1 to v1.1.0, drains node 2, shifts traffic to node 1 (v1.1.0), and upgrades node 2 with 0% session loss.
+       - Emergency rollback under load simulation runner: reverts nodes from v1.1.0 to v1.0.0 under concurrent active sessions without dropping leases or corrupting state.
+       - Transactional audit logging for `CLUSTER_ROLLING_UPGRADE_COMPLETED` and `CLUSTER_ROLLBACK_COMPLETED`.
+  4. **Admin Upgrade Endpoints (`src/ariba_pam/api/v1/admin.py`)**:
+     - Added `GET /api/v1/admin/upgrade/status` returning cluster versioning, schema version, compatibility status, and node states.
+     - Added `POST /api/v1/admin/upgrade/simulate-roll` for administrative rolling upgrade drills.
+     - Added `POST /api/v1/admin/upgrade/simulate-rollback` for emergency rollback drills under load.
+  5. **Comprehensive Unit & Integration Test Suite (`tests/test_rolling_upgrade.py`)**:
+     - 5 tests verifying Expand/Contract schema validation (accepting additive, rejecting breaking), active session lease renewal during node drain and restart, simulated rolling upgrade drill under load (30 sessions, 0% loss), emergency rollback under load (25 sessions, 0% loss), and admin endpoints RBAC.
+  6. **Bidirectional Migration Verification (`tests/test_migration_rollback.py`)**:
+     - Verified 100% reversible step-by-step downgrade and re-upgrade across all migrations.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **153 passed, 2 skipped** (in 8.19s).
+  - `cd gateway && go test -v ./...`: **17 passed** (in 4.45s).
+  - `cd web && npm run build`: **10/10 static routes compiled successfully**.
+
+### Session 23: Multi-Node Control Plane Failover, Zone-Redundant Gateway Redundancy & HA Validation (`P8-01`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:

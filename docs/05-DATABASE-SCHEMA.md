@@ -159,3 +159,29 @@ Tamper-evident log of all evaluated authorization queries (allow and deny).
 ### `idempotency_records`
 - `(id PK, operation, actor_id, idempotency_key, request_fingerprint, response_code, response_payload JSON, created_at)`.
 - Unique constraint: `(actor_id, operation, idempotency_key)`.
+
+---
+
+## 4. Schema Evolution, Expand/Contract Migrations & Zero-Downtime Upgrades (ADR-018)
+
+To ensure 99.95% continuous availability (NFR-08) and 10-year enterprise stability, all database schema modifications must adhere strictly to the **Expand/Contract** pattern:
+
+### 1. Expand Phase (Non-Breaking Additive Migration)
+- **New Columns**: Must be declared `nullable=True` or specify a server-side `default` value. Never introduce a `NOT NULL` column without a default in a single migration step.
+- **New Tables & Indexes**: Created concurrently or non-blocking to prevent long-lived table locks.
+- **Dual-Version Compatibility**: Both Version $N$ and Version $N+1$ binaries can run concurrently during rolling deployment without SQL syntax or constraint violations. Version $N$ ignores the newly added columns; Version $N+1$ uses them gracefully.
+
+### 2. Transition & Rolling Upgrade
+- Control plane nodes are upgraded one at a time (drain $\to$ upgrade $\to$ health probe $\to$ active).
+- Active SSH and RDP sessions continue renewing leases (`/internal/v1/sessions/{id}/renew`) against either Version $N$ or Version $N+1$ control plane nodes without session disconnects.
+
+### 3. Contract Phase (Deprecation & Cleanup)
+- Renaming or dropping columns is strictly prohibited in immediate migrations.
+- Columns slated for removal enter a two-release deprecation window:
+  1. *Release 1 (Expand)*: Add new column, dual-write in application layer, migrate historical data.
+  2. *Release 2 (Cutover)*: Read from new column, stop writing to old column.
+  3. *Release 3 (Contract)*: Safely drop old column once all cluster nodes are on Release 2+.
+
+### 4. Bidirectional Reversibility Invariant
+- Every Alembic migration file MUST define fully reversible `upgrade()` and `downgrade()` routines.
+- In the event of a deployment rollback under load, Version $N+1$ code is rolled back to Version $N$ immediately without requiring database schema reversal, ensuring zero downtime and zero audit log loss.

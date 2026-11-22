@@ -32,6 +32,7 @@ from ariba_pam.services.soc_adapter import soc_adapter
 from ariba_pam.services.idp import MultiIdPService, AMR_CLASSIFICATIONS
 from ariba_pam.services.itsm import itsm_adapter
 from ariba_pam.services.failover import failover_service
+from ariba_pam.services.upgrade import rolling_upgrade_service
 
 router = APIRouter(prefix="/admin", tags=["Administration & Change Control"])
 
@@ -633,6 +634,60 @@ def simulate_ha_failover(
     return {
         "simulation": sim_result,
         "cluster_status": failover_service.get_ha_status(db=db),
+    }
+
+
+@router.get("/upgrade/status", response_model=Dict[str, Any])
+def get_upgrade_status(
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve cluster version, schema evolution compatibility, and node rollout state (P8-02, ADR-018)."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if not any(r in user_roles for r in ("admin", "operator", "auditor", "custodian")):
+        raise ForbiddenException("Insufficient permissions to inspect cluster upgrade status", code="NOT_PERMITTED")
+
+    return rolling_upgrade_service.get_upgrade_status()
+
+
+@router.post("/upgrade/simulate-roll", response_model=Dict[str, Any])
+def simulate_rolling_upgrade_drill(
+    simulated_active_sessions: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Simulate a zero-downtime rolling upgrade drill with active session lease preservation."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if "admin" not in user_roles:
+        raise ForbiddenException("Only administrators can execute simulated rolling upgrade drills", code="NOT_PERMITTED")
+
+    result = rolling_upgrade_service.simulate_rolling_upgrade(
+        db=db,
+        simulated_active_sessions=simulated_active_sessions,
+    )
+    return {
+        "drill_result": result,
+        "upgrade_status": rolling_upgrade_service.get_upgrade_status(),
+    }
+
+
+@router.post("/upgrade/simulate-rollback", response_model=Dict[str, Any])
+def simulate_rollback_drill(
+    simulated_active_sessions: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Simulate an emergency deployment rollback drill under active session load."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if "admin" not in user_roles:
+        raise ForbiddenException("Only administrators can execute simulated deployment rollback drills", code="NOT_PERMITTED")
+
+    result = rolling_upgrade_service.simulate_rollback_under_load(
+        db=db,
+        simulated_active_sessions=simulated_active_sessions,
+    )
+    return {
+        "drill_result": result,
+        "upgrade_status": rolling_upgrade_service.get_upgrade_status(),
     }
 
 
