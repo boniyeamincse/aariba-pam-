@@ -1,0 +1,33 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.kubeconfig
+/secrets/
+/recordings/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# JavaScript and application builds
+node_modules/
+.next/
+dist/
+coverage/
+
+# Local tooling
+.DS_Store
+.idea/
+.vscode/
+*.log
