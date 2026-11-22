@@ -117,7 +117,17 @@ def seeded_fixtures(db_session: Session):
         idp_subject="sub_disabled_999",
         is_active=False,
     )
-    db_session.add_all([user_alice, user_bob, user_charlie, user_dave, user_disabled])
+    user_eva = User(
+        id="usr_eva",
+        email="eva@example.com",
+        full_name="Eva Auditor & Custodian",
+        idp_issuer=settings.idp_issuer,
+        idp_subject="sub_eva_555",
+        is_active=True,
+    )
+    role_custodian = Role(id="rol_custodian", name="evidence_custodian", description="Evidence Custodian")
+    db_session.add(role_custodian)
+    db_session.add_all([user_alice, user_bob, user_charlie, user_dave, user_disabled, user_eva])
 
     # 3. Role Assignments
     # Alice is requester for team 'payments'
@@ -159,7 +169,22 @@ def seeded_fixtures(db_session: Session):
         scope_type="global",
         scope_value="*",
     )
-    db_session.add_all([ra_alice, ra_bob, ra_charlie, ra_dave_admin, ra_dave_op])
+    # Eva is Evidence Custodian and Auditor
+    ra_eva_custodian = RoleAssignment(
+        id="ras_eva_custodian",
+        user_id=user_eva.id,
+        role_id=role_custodian.id,
+        scope_type="global",
+        scope_value="*",
+    )
+    ra_eva_auditor = RoleAssignment(
+        id="ras_eva_auditor",
+        user_id=user_eva.id,
+        role_id=role_auditor.id,
+        scope_type="global",
+        scope_value="*",
+    )
+    db_session.add_all([ra_alice, ra_bob, ra_charlie, ra_dave_admin, ra_dave_op, ra_eva_custodian, ra_eva_auditor])
 
     # 4. Gateway Zone
     zone_lab = GatewayZone(id="zon_lab_01", name="lab-zone-primary", description="Primary Lab Zone")
@@ -224,6 +249,7 @@ def seeded_fixtures(db_session: Session):
         "bob": user_bob,
         "charlie": user_charlie,
         "dave": user_dave,
+        "eva": user_eva,
         "disabled": user_disabled,
         "asset_payment": asset_payment,
         "asset_analytics": asset_analytics,

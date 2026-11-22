@@ -126,3 +126,91 @@ class CertificateSignOutput(BaseModel):
     ca_fingerprint: str
 
 
+class CreateAuditExportInput(BaseModel):
+    """POST /api/v1/audit-events/exports payload."""
+
+    justification: str = Field(min_length=5)
+    scope_filter: Optional[str] = None
+    limit: int = Field(default=200, ge=1, le=1000)
+
+
+class AuditExportResponse(BaseModel):
+    """Audit export bundle response."""
+
+    export_id: str
+    export_type: str
+    status: str
+    record_count: int
+    manifest_sha256: str
+    storage_uri: str
+    download_url: str
+    justification: str
+    expires_at: AwareDatetime
+    created_at: AwareDatetime
+    requester_id: str
+
+
+class VerifyIntegrityInput(BaseModel):
+    """POST /api/v1/audit-events/verify-integrity payload."""
+
+    batch_limit: int = Field(default=100, ge=1, le=1000)
+
+
+class VerifyIntegrityResponse(BaseModel):
+    """POST /api/v1/audit-events/verify-integrity response."""
+
+    verified: bool
+    events_checked: int
+    tampered_event_ids: List[str]
+    hash_algorithm: str
+    verified_at: AwareDatetime
+    message: str
+
+
+class RecordingResponse(BaseModel):
+    """GET /api/v1/recordings/{recording_id} response."""
+
+    recording_id: str
+    session_id: str
+    asset_id: str
+    asset_name: str
+    target_account: str
+    duration_seconds: int
+    size_bytes: int
+    coverage_status: str
+    digest_sha256: str
+    storage_uri: str
+    created_at: AwareDatetime
+
+
+class PlaybackSessionResponse(BaseModel):
+    """POST /api/v1/recordings/{recording_id}/playback-sessions response."""
+
+    recording_id: str
+    playback_url: str
+    token: str
+    expires_at: AwareDatetime
+
+
+class CreateRecordingExportInput(BaseModel):
+    """POST /api/v1/recordings/{recording_id}/exports payload."""
+
+    justification: str = Field(min_length=5)
+
+
+class RecordingExportResponse(BaseModel):
+    """Recording export job response."""
+
+    export_id: str
+    recording_id: str
+    status: str
+    manifest_sha256: str
+    storage_uri: str
+    download_url: str
+    justification: str
+    expires_at: AwareDatetime
+    created_at: AwareDatetime
+    requester_id: str
+
+
+

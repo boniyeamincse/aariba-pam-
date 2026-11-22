@@ -36,5 +36,10 @@
 | P4-01 | Integrate isolated SSH certificate signing | [src/ariba_pam/services/ca.py](../src/ariba_pam/services/ca.py), [src/ariba_pam/api/internal/gateway.py](../src/ariba_pam/api/internal/gateway.py), [tests/test_ssh_ca.py](../tests/test_ssh_ca.py) |
 | P4-02 | Test CA rollover, revocation, and recovery | [src/ariba_pam/services/ca.py](../src/ariba_pam/services/ca.py), [tests/test_ssh_ca.py](../tests/test_ssh_ca.py) |
 | P5-CONSOLE | Scaffold Enterprise Web Console in Next.js + TypeScript | [web/app/page.tsx](../web/app/page.tsx), [web/lib/api-client.ts](../web/lib/api-client.ts), [web/package.json](../web/package.json) |
+| P5-01 | Deliver audit events to independently administered storage and verify WORM compliance | [src/ariba_pam/services/audit.py](../src/ariba_pam/services/audit.py), [src/ariba_pam/api/v1/audit.py](../src/ariba_pam/api/v1/audit.py), [tests/test_audit_exports.py](../tests/test_audit_exports.py) |
+| P5-02 | Capture and store scoped SSH recordings with SHA-256 integrity digests | [src/ariba_pam/db/models.py](../src/ariba_pam/db/models.py), [src/ariba_pam/api/internal/gateway.py](../src/ariba_pam/api/internal/gateway.py), [tests/test_audit_exports.py](../tests/test_audit_exports.py) |
+| P5-04 | Add scoped audit search and recording playback | [src/ariba_pam/api/v1/recordings.py](../src/ariba_pam/api/v1/recordings.py), [web/components/player.tsx](../web/components/player.tsx), [tests/test_audit_exports.py](../tests/test_audit_exports.py) |
+| P5-05 | Add separately scoped recording and audit exports | [src/ariba_pam/api/v1/audit.py](../src/ariba_pam/api/v1/audit.py), [src/ariba_pam/api/v1/recordings.py](../src/ariba_pam/api/v1/recordings.py), [tests/test_audit_exports.py](../tests/test_audit_exports.py) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.
+

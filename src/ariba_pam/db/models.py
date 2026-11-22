@@ -292,6 +292,45 @@ class AccessSession(Base):
 
     grant: Mapped["AccessGrant"] = relationship("AccessGrant")
     launch: Mapped["SessionLaunch"] = relationship("SessionLaunch")
+    recording: Mapped[Optional["SessionRecording"]] = relationship("SessionRecording", back_populates="session", uselist=False)
+
+
+class SessionRecording(Base):
+    """Immutable terminal session recording with cryptographic integrity digest."""
+
+    __tablename__ = "session_recordings"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: generate_id("rec"))
+    session_id: Mapped[str] = mapped_column(String(64), ForeignKey("access_sessions.id"), unique=True, nullable=False)
+    digest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_uri: Mapped[str] = mapped_column(String(255), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duration_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    coverage_status: Mapped[str] = mapped_column(String(32), default="complete", nullable=False)  # complete, partial, gap
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    session: Mapped["AccessSession"] = relationship("AccessSession", back_populates="recording")
+
+
+class EvidenceExport(Base):
+    """Auditable evidence export package with cryptographic manifest and TTL."""
+
+    __tablename__ = "evidence_exports"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: generate_id("exp"))
+    requester_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), nullable=False)
+    export_type: Mapped[str] = mapped_column(String(32), nullable=False)  # audit_trail, session_recording
+    resource_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # session_id or recording_id if specific
+    scope_filter: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    record_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_uri: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="completed", nullable=False)  # pending, completed, failed
+    justification: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    requester: Mapped["User"] = relationship("User")
 
 
 class AuditOutbox(Base):
@@ -304,6 +343,7 @@ class AuditOutbox(Base):
     correlation_id: Mapped[str] = mapped_column(String(64), nullable=False)
     actor_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     payload: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    payload_digest: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     delivery_state: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)  # pending, delivered, failed
     delivery_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

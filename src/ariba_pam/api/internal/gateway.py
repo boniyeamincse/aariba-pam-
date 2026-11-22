@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session, joinedload
 from ariba_pam.config import settings
 from ariba_pam.db.session import get_db
-from ariba_pam.db.models import SessionLaunch, AccessGrant, AccessSession, Asset, TargetAccount
+from ariba_pam.db.models import SessionLaunch, AccessGrant, AccessSession, Asset, TargetAccount, SessionRecording
 from ariba_pam.services.audit import AuditService
 from ariba_pam.core.errors import ForbiddenException, NotFoundException, ConflictException, UnauthorizedException
 from ariba_pam.db.base import generate_id, utc_now, ensure_utc
@@ -200,6 +200,32 @@ def record_gateway_event(
             session.status = "failed"
             session.ended_at = utc_now()
             session.termination_reason = payload.get("reason", "Gateway session failure")
+
+    # Ingest and persist session recording metadata if delivered
+    if payload.get("recording"):
+        rec_data = payload["recording"]
+        recording = db.query(SessionRecording).filter(SessionRecording.session_id == session.id).first()
+        if not recording:
+            recording = SessionRecording(
+                id=rec_data.get("recording_id") or generate_id("rec"),
+                session_id=session.id,
+                digest_sha256=rec_data.get("digest_sha256", ""),
+                storage_uri=rec_data.get("storage_uri", f"s3://ariba-pam-evidence-worm/recordings/{session.id}.cast"),
+                size_bytes=rec_data.get("size_bytes", 0),
+                duration_seconds=rec_data.get("duration_seconds", 0),
+                coverage_status=rec_data.get("coverage_status", "complete"),
+                created_at=utc_now(),
+            )
+            db.add(recording)
+        else:
+            if "digest_sha256" in rec_data:
+                recording.digest_sha256 = rec_data["digest_sha256"]
+            if "size_bytes" in rec_data:
+                recording.size_bytes = rec_data["size_bytes"]
+            if "duration_seconds" in rec_data:
+                recording.duration_seconds = rec_data["duration_seconds"]
+            if "coverage_status" in rec_data:
+                recording.coverage_status = rec_data["coverage_status"]
 
     AuditService.record_event(
         db=db,

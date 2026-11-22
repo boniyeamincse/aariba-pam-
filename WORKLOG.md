@@ -9,11 +9,12 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 4 Ephemeral SSH CA Completed / Phase 5 Active (Enterprise Web Console)
-- **Control Plane Test Health**: `49 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Current Milestone**: Phase 5 Active (Evidence Custodian, WORM Verification & Scoped Exports Complete)
+- **Control Plane Test Health**: `58 passed, 2 skipped` (`DEBUG=false pytest -v`)
 - **Gateway Test Health**: `3 passed` (`cd gateway && go test -v ./...`)
-- **Database Migration State**: Alembic head (`0002_access_policy_versions.py`)
-- **Security Invariants**: Default Deny, HTTP 404 identifier concealment, Separation of Duties (SoD), Transactional Audit Outbox.
+- **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
+- **Database Migration State**: Alembic head (`0003_evidence_and_recordings.py`)
+- **Security Invariants**: Default Deny, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Transactional Audit Outbox.
 
 ---
 
@@ -32,7 +33,35 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 8: Web Terminal & Audit Forensics Player (`P5-02 & P5-04`) (Current)
+### Session 9: Evidence Custodian, WORM Verification & Scoped Exports (`P5-01, P5-02, P5-04, P5-05`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Database Schema & Migrations (`src/ariba_pam/db/models.py`, `alembic/versions/0003_evidence_and_recordings.py`)**:
+     - Added `payload_digest` column to `audit_outbox` for tamper-evident cryptographic checksums.
+     - Added `SessionRecording` model (`session_recordings`) tracking SHA-256 stream digests, storage URIs, size, and coverage status (`complete`, `partial`, `gap`).
+     - Added `EvidenceExport` model (`evidence_exports`) tracking sealed export packages, composite SHA-256 manifests, justifications, and expiring TTLs.
+  2. **Audit Service & Cryptographic Verification (`src/ariba_pam/services/audit.py`)**:
+     - `AuditService.record_event`: Automatically computes deterministic SHA-256 payload digest upon outbox creation.
+     - `AuditService.verify_integrity`: Recalculates payload digests across audit outbox records to detect tampering, modification, or injection.
+     - `AuditService.create_audit_export`: Packages sealed audit event bundles with composite manifest and 1-hour expiration.
+  3. **Gateway Recording Event Ingestion (`src/ariba_pam/api/internal/gateway.py`)**:
+     - Gateway `POST /internal/v1/sessions/{session_id}/events` atomically ingests and persists `SessionRecording` metadata on session close.
+  4. **Evidence Custodian & Scoped Recording APIs (`src/ariba_pam/api/v1/audit.py`, `src/ariba_pam/api/v1/recordings.py`)**:
+     - `POST /api/v1/audit-events/verify-integrity`: WORM compliance check restricted strictly to `evidence_custodian` or `auditor`. Routine PAM Admins denied with 403 Forbidden.
+     - `POST /api/v1/audit-events/exports` & `GET /api/v1/audit-events/exports/{export_id}`: Sealed audit bundles with 404 identifier concealment on unauthorized queries.
+     - `GET /api/v1/recordings` & `GET /api/v1/recordings/{recording_id}`: Scoped recording metadata reads with 404 concealment.
+     - `POST /api/v1/recordings/{recording_id}/playback-sessions`: Short-lived playback streaming URL generation with `RECORDING_PLAYBACK_AUTHORIZED` audit logging.
+     - `POST /api/v1/recordings/{recording_id}/exports` & `GET /api/v1/recording-exports/{export_id}`: Scoped recording export packages.
+  5. **Verification & Test Suite (`tests/test_audit_exports.py`, `tests/test_migrations.py`)**:
+     - Added 9 comprehensive integration tests verifying WORM integrity verification, tamper detection, custodian boundary enforcement (PAM admin denied), export bundle creation, and 404 concealment.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **58 passed, 2 skipped** (in 3.44s).
+  - `cd gateway && go test -v ./...`: **3 passed** (in 2.01s).
+  - `npm run build` in `web/`: **10/10 static routes compiled successfully**.
+
+---
+
+### Session 8: Web Terminal & Audit Forensics Player (`P5-CONSOLE`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Interactive In-Browser Web Terminal (`web/components/terminal.tsx`, `web/app/terminal/page.tsx`)**:
@@ -159,19 +188,19 @@ Every AI agent must follow the rules defined in these configuration files:
 The following tasks are prioritized for execution:
 
 ```
-[Phase 3 Complete ✓] ──► [Phase 4 Ephemeral CA Complete ✓] ──► [Phase 5: Enterprise Web Console]
+[Phase 3 Complete ✓] ──► [Phase 4 Ephemeral CA Complete ✓] ──► [Phase 5 Evidence & Web Console Active]
 ```
 
-### Priority 1: Enterprise Web Console Foundation (`P5-CONSOLE`)
-- **Objective**: Scaffold the Next.js 14/15 App Router web application in `web/`.
-  - Initialize `web/` with TypeScript, Tailwind CSS, and shadcn/ui components.
-  - Generate TypeScript API client & types from `docs/openapi.yaml`.
-  - Build core navigation layout and Scoped Asset Catalog view.
-- **Target Directory**: `web/`
+### Priority 1: Gateway Evidence Failure Handling (`P5-03`)
+- **Objective**: Handle recording and audit delivery failure at the Go SSH gateway (`FR-08`, `NFR-03`, `T-07`).
+  - Block unsafe launches if recording pipeline is degraded.
+  - Pause stream forwarding on capture loss and auto-terminate session after approved grace limit (30s).
+  - Alert Control Plane on evidence gaps (`coverage_status = "gap"`).
+- **Target Files**: `gateway/session.go`, `gateway/server.go`, `tests/test_audit_exports.py`
 
-### Priority 2: In-Browser Web Terminal & Asciinema Player
-- **Objective**: Integrate `xterm.js` for interactive in-browser SSH sessions and `asciinema-player` for scoped audit playback.
-- **Target Files**: `web/components/terminal.tsx`, `web/components/player.tsx`
+### Priority 2: Pilot SOC Alerts & Health Monitoring (`P5-06`)
+- **Objective**: Configure pilot SOC alerts and health monitoring for capture loss, evidence delivery outage, lease renewal failure, and CA signing errors (`FR-10`, `NFR-08`, `T-07`, `T-10`).
+- **Target Files**: `src/ariba_pam/services/notifications.py`, `src/ariba_pam/api/internal/gateway.py`
 
 ---
 
