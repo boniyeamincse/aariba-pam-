@@ -9,12 +9,12 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Complete (`P7-01` to `P7-04` Complete) · Phase 8 Active (`P8-01` & `P8-02` Complete · `P8-03: Test recovery at the approved expanded capacity` Next)
-- **Control Plane Test Health**: `153 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Current Milestone**: Phases 1 through 8 100% Complete! (`P8-03: Test recovery at the approved expanded capacity` Complete · All Planned Roadmap Milestones Delivered)
+- **Control Plane Test Health**: `159 passed, 2 skipped` (`DEBUG=false pytest -v`)
 - **Gateway Test Health**: `17 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
 - **Database Migration State**: Alembic head (`0008_rdp_support.py`)
-- **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Multi-Custodian Quorum, Transactional Audit Outbox, Bidirectional Schema Migration Reversibility.
+- **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Multi-Custodian Quorum, Transactional Audit Outbox, Bidirectional Schema Migration Reversibility, Disaster Recovery RTO $\le$ 15m / RPO $\le$ 1m.
 
 ---
 
@@ -33,7 +33,37 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 24: Zero-Downtime Rolling Upgrades, Expand/Contract Schema Evolution & Rollback Under Load (`P8-02`) (Current)
+### Session 25: Disaster Recovery Rehearsal, Split-Key Custody & Evidence Retrieval at Expanded Capacity (`P8-03`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:
+     - Documented `ADR-019: Disaster Recovery Rehearsal, Split-Key Custody Recovery, and Evidence Retrieval at Approved Expanded Capacity`.
+     - Established enterprise expanded capacity baseline: 500+ assets, 2,000+ users, 5,000+ sessions/recordings, 10,000+ audit events.
+     - Formalized Disaster Recovery RTO $\le$ 15 minutes (900s) and RPO $\le$ 1 minute (60s) (NFR-04).
+     - Defined multi-custodian split-share key recovery SLA $\le$ 5 minutes (300s) for SSH User CA and Vault master keys with dual-trust rollover and ephemeral certificate signing verification.
+     - Enforced forensic evidence retrieval latency target p95 $\le$ 150 ms (NFR-05) across large-scale audit outbox and session recordings catalogs.
+  2. **Audit and Evidence Architecture Documentation (`docs/15-AUDIT-AND-EVIDENCE-MANAGEMENT.md`)**:
+     - Added Section 5 detailing Expanded Capacity Disaster Recovery & Forensic Evidence Retrieval Architecture.
+     - Documented target capacity profile, restore & reconciliation protocol (SHA-256 composite manifest digest calculation, stale active grant reconciliation), multi-custodian split-key recovery procedure, and forensic search benchmark formulas.
+  3. **Expanded Recovery Domain Service (`src/ariba_pam/services/expanded_recovery.py`)**:
+     - Implemented `ExpandedRecoveryService` with:
+       - `ExpandedCapacityProfile`: Target thresholds (500 assets, 2,000 users, 5,000 sessions, 10,000 audit events, RTO $\le$ 15m, Key Recovery $\le$ 5m, Search p95 $\le$ 150ms).
+       - Synthetic dataset generator for load and scale testing.
+       - Database restore benchmarking with SHA-256 composite manifest verification, active grant auto-revocation reconciliation, and RTO SLA evaluation.
+       - Multi-custodian split-key recovery benchmarking: verifies SSH CA rollover, dual-trust retention, and ephemeral OpenSSH user certificate signing within 5-minute SLA.
+       - Forensic evidence search benchmarking: measures latency distribution over thousands of records, computing mean, min, max, and p95 latency against NFR-05 ($\le$ 150ms).
+       - End-to-end rehearsal drill runner writing `EXPANDED_CAPACITY_RECOVERY_REHEARSED` to `AuditOutbox`.
+  4. **Admin Recovery Endpoints (`src/ariba_pam/api/v1/admin.py`)**:
+     - Added `GET /api/v1/admin/recovery/expanded-status` returning current database volume, expanded capacity targets, and last drill summary.
+     - Added `POST /api/v1/admin/recovery/simulate-expanded-drill` executing end-to-end benchmarked DR drills with configurable scaling.
+  5. **Comprehensive Unit & Integration Test Suite (`tests/test_expanded_recovery.py`)**:
+     - 6 tests verifying synthetic expanded dataset generation, benchmarked database restore (SHA-256 digest & stale grant revocation), benchmarked split-key recovery (SSH CA rollover & certificate signing), benchmarked evidence retrieval latency (p95 $\le$ 150ms), full end-to-end recovery drill with transactional audit log, and admin endpoints RBAC/anti-enumeration.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **159 passed, 2 skipped** (in 9.53s).
+  - `cd gateway && go test -v ./...`: **17 passed** (in 4.47s).
+  - `cd web && npm run build`: **10/10 static routes compiled successfully**.
+
+### Session 24: Zero-Downtime Rolling Upgrades, Expand/Contract Schema Evolution & Rollback Under Load (`P8-02`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:

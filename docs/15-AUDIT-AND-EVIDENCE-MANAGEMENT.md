@@ -64,3 +64,28 @@ To eliminate the classic distributed systems "dual-write" failure (where a datab
 - Evidence storage buckets are managed exclusively by the **Evidence Custodian** role.
 - Buckets are configured with Object Lock in Compliance Mode (Write-Once, Read-Many).
 - Neither standard PAM Administrators, Security Operators, nor compromised Control Plane application credentials possess IAM permissions to execute `DeleteObject`, `PutObjectRetention`, or overwrite existing recordings.
+
+---
+
+## 5. Disaster Recovery, Key Custody Reconstitution & Expanded Capacity Evidence Retrieval (ADR-019)
+
+As Ariba PAM scales beyond the pilot to the approved enterprise expanded capacity baseline, disaster recovery and forensic evidence retrieval must satisfy strict timing benchmarks:
+
+### 1. Expanded Capacity Baseline
+- **Managed Assets**: 500+ infrastructure servers distributed across 5+ gateway zones.
+- **Workforce Users**: 2,000+ accounts with scoped RBAC/ABAC role assignments.
+- **Access Sessions & Recordings**: 5,000+ historical sessions with SHA-256 verified asciinema recording digests.
+- **Audit Outbox Events**: 10,000+ immutable outbox rows spanning request lifecycles, approvals, and revocations.
+
+### 2. Database Restore & Reconciliation SLA (NFR-04)
+- **Target Timing**: RTO $\le$ 15 minutes, RPO $\le$ 1 minute.
+- **Manifest Integrity**: Point-in-time restore validates composite SHA-256 manifest digest across all restored tables before accepting inbound traffic.
+- **Stale Grant Reconciliation**: Grants that were active prior to the outage are automatically transitioned to `expired` or `revoked`, guaranteeing zero standing unauthorized access upon database revival.
+
+### 3. Split-Key Custody Reconstitution
+- **SSH CA Key Recovery**: Reconstructed via $M$-of-$N$ split-shares held by independent Signing Custodians within a 5-minute operational SLA.
+- **Vault Master Key Recovery**: Re-unsealed using custodian threshold shares to resume JIT credential injection without exposing raw target passwords.
+
+### 4. Forensic Evidence Retrieval Benchmark (NFR-05)
+- **Query Throughput & Latency**: Paginated audit outbox queries and session recording digest lookups over 10,000+ rows must complete with p95 latency $\le$ 150 ms.
+- **Export Packaging**: WORM evidence exports package compressed JSON transcripts with SHA-256 verification hashes for compliance auditors.

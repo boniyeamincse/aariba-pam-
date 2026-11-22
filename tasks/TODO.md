@@ -44,10 +44,8 @@ Use [audit and recovery](../specifications/modules/audit-and-recovery.md), [secu
 
 All Phase 5 tasks (P5-01 through P5-10) and their implementation evidence have been completed, verified, and recorded in [COMPLETED.md](COMPLETED.md).
 
-## Phases 6–8 · Deferred backlog
+## Phases 6–8 · Deferred backlog (Operational Enhancements & Scale)
 
-Prioritize these after the pilot review. See [future enhancements](../docs/18-FUTURE-ENHANCEMENTS.md).
+All Phase 6 (P6-01, P6-02), Phase 7 (P7-01, P7-02, P7-03, P7-04), and Phase 8 (P8-01, P8-02, P8-03) tasks and their implementation evidence have been completed, verified, and recorded in [COMPLETED.md](COMPLETED.md).
 
-| ID | Task | Depends on | Completion check |
-| --- | --- | --- | --- |
-| P8-03 | Test recovery at the approved expanded capacity | P8-01 | Record restore, key recovery, and evidence retrieval timings for the larger environment |
+All planned milestones across Phases 1 through 8 are now 100% complete!

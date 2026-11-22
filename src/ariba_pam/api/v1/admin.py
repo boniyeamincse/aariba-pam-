@@ -33,6 +33,7 @@ from ariba_pam.services.idp import MultiIdPService, AMR_CLASSIFICATIONS
 from ariba_pam.services.itsm import itsm_adapter
 from ariba_pam.services.failover import failover_service
 from ariba_pam.services.upgrade import rolling_upgrade_service
+from ariba_pam.services.expanded_recovery import expanded_recovery_service
 
 router = APIRouter(prefix="/admin", tags=["Administration & Change Control"])
 
@@ -688,6 +689,40 @@ def simulate_rollback_drill(
     return {
         "drill_result": result,
         "upgrade_status": rolling_upgrade_service.get_upgrade_status(),
+    }
+
+
+@router.get("/recovery/expanded-status", response_model=Dict[str, Any])
+def get_expanded_recovery_status(
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve expanded capacity disaster recovery baseline, SLA benchmarks, and last drill result (P8-03, ADR-019)."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if not any(r in user_roles for r in ("admin", "operator", "auditor", "custodian")):
+        raise ForbiddenException("Insufficient permissions to inspect expanded recovery status", code="NOT_PERMITTED")
+
+    return expanded_recovery_service.get_status()
+
+
+@router.post("/recovery/simulate-expanded-drill", response_model=Dict[str, Any])
+def simulate_expanded_recovery_drill(
+    scale: float = 1.0,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Execute full expanded capacity disaster recovery rehearsal (database restore, split-key recovery, evidence search)."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if "admin" not in user_roles and "operator" not in user_roles and "custodian" not in user_roles:
+        raise ForbiddenException("Only administrators, operators, or custodians can execute expanded recovery drills", code="NOT_PERMITTED")
+
+    drill_record = expanded_recovery_service.run_expanded_recovery_drill(
+        db=db,
+        operator_id=current_user.id,
+        scale=scale,
+    )
+    return {
+        "drill_record": drill_record,
+        "status": expanded_recovery_service.get_status(),
     }
 
 
