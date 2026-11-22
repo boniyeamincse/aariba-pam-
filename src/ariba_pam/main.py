@@ -3,15 +3,17 @@
 import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, Depends
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 from ariba_pam.config import settings
 from ariba_pam.core.errors import PAMException
-from ariba_pam.db.session import engine, create_all_tables
+from ariba_pam.db.session import engine, create_all_tables, get_db
 from ariba_pam.api.router import api_v1_router, internal_router
 from ariba_pam.portal import router as portal_router
+from ariba_pam.services.alerts import soc_alerts_service
 
 
 @asynccontextmanager
@@ -100,6 +102,12 @@ def readiness_check():
                 "error": str(e),
             },
         )
+
+
+@app.get("/health/components", tags=["Health & Operability"])
+def component_health_check(db: Session = Depends(get_db)):
+    """Deep component health probe for NFR-08 (99.95% availability & health probes)."""
+    return soc_alerts_service.get_system_health(db)
 
 
 # Mount routers

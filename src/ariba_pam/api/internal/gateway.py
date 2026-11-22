@@ -11,9 +11,10 @@ from ariba_pam.db.models import SessionLaunch, AccessGrant, AccessSession, Asset
 from ariba_pam.services.audit import AuditService
 from ariba_pam.core.errors import ForbiddenException, NotFoundException, ConflictException, UnauthorizedException
 from ariba_pam.db.base import generate_id, utc_now, ensure_utc
-from ariba_pam.api.schemas import LaunchConsumeInput, CertificateSignInput, CertificateSignOutput
+from ariba_pam.api.schemas import LaunchConsumeInput, CertificateSignInput, CertificateSignOutput, GatewayHeartbeatInput
 from ariba_pam.services.policies import authorize_revision
 from ariba_pam.services.ca import ca_service
+from ariba_pam.services.alerts import soc_alerts_service
 
 router = APIRouter(prefix="/internal/v1", tags=["Internal Gateway Interfaces"])
 
@@ -151,6 +152,18 @@ def renew_session_lease(
     grant_end = ensure_utc(grant.effective_end_at)
 
     if grant.status != "active" or session.status != "active":
+        soc_alerts_service.record_alert(
+            db=db,
+            alert_type="LEASE_RENEWAL_FAILURE",
+            severity="HIGH",
+            title="Session lease renewal failed",
+            description=f"Lease renewal rejected: session is {session.status}, grant is {grant.status}",
+            correlation_id=x_correlation_id,
+            details={"session_id": session.id, "session_status": session.status, "grant_status": grant.status},
+            session_id=session.id,
+            gateway_id=session.gateway_id,
+            asset_id=grant.asset_id,
+        )
         raise ConflictException(f"Cannot renew: session is {session.status}, grant is {grant.status}", code="SESSION_TERMINATING")
 
     if now >= grant_end:
@@ -158,6 +171,18 @@ def renew_session_lease(
         session.ended_at = now
         session.termination_reason = "Grant window expired"
         db.commit()
+        soc_alerts_service.record_alert(
+            db=db,
+            alert_type="LEASE_RENEWAL_FAILURE",
+            severity="HIGH",
+            title="Session lease renewal failed: grant expired",
+            description=f"Lease renewal rejected: grant window expired for session {session.id}",
+            correlation_id=x_correlation_id,
+            details={"session_id": session.id, "grant_end": grant_end.isoformat()},
+            session_id=session.id,
+            gateway_id=session.gateway_id,
+            asset_id=grant.asset_id,
+        )
         raise ConflictException("Grant validity window has expired", code="GRANT_EXPIRED")
 
     # Compute lease deadline bounded by grant expiry
@@ -227,6 +252,34 @@ def record_gateway_event(
             if "coverage_status" in rec_data:
                 recording.coverage_status = rec_data["coverage_status"]
 
+        if rec_data.get("coverage_status") == "gap":
+            soc_alerts_service.record_alert(
+                db=db,
+                alert_type="CAPTURE_FAILURE",
+                severity="CRITICAL",
+                title="Session recording coverage gap",
+                description=f"Gateway {session.gateway_id} reported a recording coverage gap for session {session.id}",
+                correlation_id=x_correlation_id,
+                details={"session_id": session.id, "size_bytes": rec_data.get("size_bytes", 0), "reason": session.termination_reason},
+                session_id=session.id,
+                gateway_id=session.gateway_id,
+                asset_id=session.grant.asset_id if session.grant else None,
+            )
+
+    if event_state == "failed" and "Unsafe launch" in str(payload.get("reason", "")):
+        soc_alerts_service.record_alert(
+            db=db,
+            alert_type="UNSAFE_LAUNCH_BLOCKED",
+            severity="CRITICAL",
+            title="Unsafe session launch blocked",
+            description=f"Gateway {session.gateway_id} blocked unsafe session launch: {payload.get('reason')}",
+            correlation_id=x_correlation_id,
+            details={"session_id": session.id, "reason": payload.get("reason")},
+            session_id=session.id,
+            gateway_id=session.gateway_id,
+            asset_id=session.grant.asset_id if session.grant else None,
+        )
+
     AuditService.record_event(
         db=db,
         event_type="GATEWAY_SESSION_EVENT",
@@ -267,15 +320,50 @@ def sign_session_certificate(
         raise NotFoundException("Session not found", code="SESSION_NOT_FOUND")
 
     if session.status != "active":
+        soc_alerts_service.record_alert(
+            db=db,
+            alert_type="SIGNING_FAILURE",
+            severity="HIGH",
+            title="SSH certificate signing failed: session not active",
+            description=f"Signing rejected: session {session.id} is {session.status}",
+            correlation_id=x_correlation_id,
+            details={"session_id": session.id, "session_status": session.status},
+            session_id=session.id,
+            gateway_id=session.gateway_id,
+        )
         raise ConflictException(f"Cannot sign certificate: session is {session.status}", code="SESSION_NOT_ACTIVE")
 
     grant = session.grant
     if grant.status != "active":
+        soc_alerts_service.record_alert(
+            db=db,
+            alert_type="SIGNING_FAILURE",
+            severity="HIGH",
+            title="SSH certificate signing failed: grant not active",
+            description=f"Signing rejected: grant {grant.id} is {grant.status}",
+            correlation_id=x_correlation_id,
+            details={"session_id": session.id, "grant_status": grant.status},
+            session_id=session.id,
+            gateway_id=session.gateway_id,
+            asset_id=grant.asset_id,
+        )
         raise ConflictException(f"Cannot sign certificate: grant is {grant.status}", code="GRANT_NOT_ACTIVE")
 
     now = utc_now()
     grant_end = ensure_utc(grant.effective_end_at)
     if now >= grant_end:
+        soc_alerts_service.record_alert(
+            db=db,
+            alert_type="SIGNING_FAILURE",
+            severity="HIGH",
+            title="SSH certificate signing failed: grant expired",
+            description=f"Signing rejected: grant {grant.id} expired at {grant_end.isoformat()}",
+            correlation_id=x_correlation_id,
+            details={"session_id": session.id, "grant_end": grant_end.isoformat()},
+            session_id=session.id,
+            gateway_id=session.gateway_id,
+            asset_id=grant.asset_id,
+        )
         raise ConflictException("Grant validity window has expired", code="GRANT_EXPIRED")
 
     target_username = grant.target_account.username
@@ -310,4 +398,31 @@ def sign_session_certificate(
         serial=serial_int,
         ca_fingerprint=ca_fp,
     )
+
+
+@router.post("/gateways/{gateway_id}/heartbeat", response_model=Dict[str, Any])
+def record_gateway_heartbeat(
+    gateway_id: str,
+    payload: GatewayHeartbeatInput,
+    db: Session = Depends(get_db),
+    _gw_auth: None = Depends(verify_gateway_identity),
+):
+    """
+    Gateway transmits 15-second health heartbeat and capture pipeline status (FR-10, NFR-08).
+    """
+    hb = soc_alerts_service.record_heartbeat(
+        gateway_id=gateway_id,
+        zone_id=payload.zone_id,
+        status=payload.status,
+        active_sessions_count=payload.active_sessions_count,
+        capture_status=payload.capture_status,
+        db=db,
+    )
+    return {
+        "gateway_id": gateway_id,
+        "status": "acknowledged",
+        "capture_status": hb["capture_status"],
+        "healthy": hb["status"] == "healthy" and hb["capture_status"] == "healthy",
+    }
+
 

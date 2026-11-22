@@ -212,5 +212,29 @@ class RecordingExportResponse(BaseModel):
     created_at: AwareDatetime
     requester_id: str
 
+class GatewayHeartbeatInput(BaseModel):
+    """POST /internal/v1/gateways/{gateway_id}/heartbeat payload."""
+
+    zone_id: str
+    status: str = "healthy"
+    active_sessions_count: int = 0
+    capture_status: str = "healthy"
 
 
+class SOCAlertResponse(BaseModel):
+    """GET /api/v1/alerts response."""
+
+    id: str
+    alert_type: str
+    severity: str
+    title: str
+    description: str
+    correlation_id: str
+    session_id: Optional[str] = None
+    gateway_id: Optional[str] = None
+    asset_id: Optional[str] = None
+    details: Dict[str, Any] = {}
+    status: str
+    acknowledged_by_id: Optional[str] = None
+    acknowledged_at: Optional[AwareDatetime] = None
+    created_at: AwareDatetime

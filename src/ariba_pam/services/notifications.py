@@ -48,12 +48,35 @@ class NotificationDispatcher:
                 self.delivered_message_ids.add(message_key)
                 AuditService.mark_delivered(db, event.id)
                 return True
-            else:
-                AuditService.mark_failed(db, event.id)
-                return False
         except Exception:
             # A delivery outage preserves the authoritative decision and records retry visibility
             AuditService.mark_failed(db, event.id)
+            if event.event_type != "SOC_SECURITY_ALERT" and event.delivery_attempts >= 3:
+                from ariba_pam.services.alerts import soc_alerts_service
+                soc_alerts_service.record_alert(
+                    db=db,
+                    alert_type="EVIDENCE_DELIVERY_FAILURE",
+                    severity="CRITICAL",
+                    title="Evidence delivery outage",
+                    description=f"Outbox event {event.id} ({event.event_type}) failed delivery exception after {event.delivery_attempts} attempts",
+                    correlation_id=event.correlation_id,
+                    details={"event_id": event.id, "event_type": event.event_type, "attempts": event.delivery_attempts},
+                )
+            return False
+
+        if not success:
+            AuditService.mark_failed(db, event.id)
+            if event.event_type != "SOC_SECURITY_ALERT" and event.delivery_attempts >= 3:
+                from ariba_pam.services.alerts import soc_alerts_service
+                soc_alerts_service.record_alert(
+                    db=db,
+                    alert_type="EVIDENCE_DELIVERY_FAILURE",
+                    severity="CRITICAL",
+                    title="Repeated evidence delivery failure",
+                    description=f"Outbox event {event.id} ({event.event_type}) reached {event.delivery_attempts} failed delivery attempts",
+                    correlation_id=event.correlation_id,
+                    details={"event_id": event.id, "event_type": event.event_type, "attempts": event.delivery_attempts},
+                )
             return False
 
     def dispatch_pending(self, db: Session, limit: int = 50) -> Dict[str, int]:

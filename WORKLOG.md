@@ -9,11 +9,11 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 5 Active (Gateway Evidence Failure Handling & WORM Verification Complete)
-- **Control Plane Test Health**: `58 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Current Milestone**: Phase 5 Active (Pilot SOC Alerts & Health Monitoring Complete)
+- **Control Plane Test Health**: `67 passed, 2 skipped` (`DEBUG=false pytest -v`)
 - **Gateway Test Health**: `7 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
-- **Database Migration State**: Alembic head (`0003_evidence_and_recordings.py`)
+- **Database Migration State**: Alembic head (`0004_soc_alerts.py`)
 - **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Transactional Audit Outbox.
 
 ---
@@ -33,7 +33,35 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 10: Gateway Evidence Failure Handling & Grace Period Auto-Termination (`P5-03`) (Current)
+### Session 11: Pilot SOC Alerts & Health Monitoring (`P5-06`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **SOC Alerts Schema & Migration (`src/ariba_pam/db/models.py`, `alembic/versions/0004_soc_alerts.py`)**:
+     - Created `SOCAlert` entity tracking alert type (`CAPTURE_FAILURE`, `EVIDENCE_DELIVERY_FAILURE`, `LEASE_RENEWAL_FAILURE`, `SIGNING_FAILURE`, `UNSAFE_LAUNCH_BLOCKED`, `SOD_VIOLATION`), severity (`CRITICAL`, `HIGH`, `WARNING`), description, correlation IDs, associated sessions, gateways, and assets.
+     - Added composite and status indexes (`ix_soc_alerts_type_severity`, `ix_soc_alerts_status`).
+  2. **Enterprise SOC Alert Service (`src/ariba_pam/services/alerts.py`)**:
+     - Built `SOCAlertsService` handling alert creation, atomic transactional outbox logging (`SOC_SECURITY_ALERT`), SIEM receiver dispatch (e.g. Wazuh / Splunk adapter hooks), 15s gateway heartbeat tracking, and aggregate system health probes (`NFR-08`).
+  3. **Gateway Heartbeat & Failure Alert Hooks (`src/ariba_pam/api/internal/gateway.py`, `src/ariba_pam/services/notifications.py`)**:
+     - Added `POST /internal/v1/gateways/{gateway_id}/heartbeat` tracking gateway liveness and degraded capture state.
+     - Wired fail-closed capture gap alert (`CAPTURE_FAILURE`) and unsafe launch blocked alert (`UNSAFE_LAUNCH_BLOCKED`).
+     - Wired lease renewal failure alert (`LEASE_RENEWAL_FAILURE`) on revoked/expired grants.
+     - Wired SSH CA certificate signing failure alert (`SIGNING_FAILURE`) on non-active sessions/grants.
+     - Wired resilient outbox delivery outage alert (`EVIDENCE_DELIVERY_FAILURE`) in `NotificationDispatcher` on repeated delivery failures (>=3).
+  4. **SOC Security & Health APIs (`src/ariba_pam/api/v1/alerts.py`, `src/ariba_pam/main.py`)**:
+     - `GET /api/v1/alerts`: Filterable SOC alert catalog (restricted to security personnel: `admin`, `operator`, `security_operator`, `auditor`).
+     - `GET /api/v1/alerts/{alert_id}`: Alert details with 404 anti-enumeration.
+     - `POST /api/v1/alerts/{alert_id}/acknowledge`: Alert acknowledgement with `SOC_ALERT_ACKNOWLEDGED` audit outbox logging.
+     - `GET /health/components` & `GET /api/v1/alerts/health/components`: Deep component health check across database, outbox backlog, ephemeral CA, and gateway clusters.
+  5. **Verification & Test Suite (`tests/test_soc_alerts.py`, `tests/test_migrations.py`)**:
+     - Added 9 comprehensive integration tests verifying capture gap alerts, unsafe launch blocking, lease renewal failures on revocation, CA signing failures, repeated delivery failures, gateway heartbeats, alert lifecycle, and SIEM custom receiver dispatch.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **67 passed, 2 skipped** (in 3.47s).
+  - `cd gateway && go test -v ./...`: **7 passed** (in 2.11s).
+  - `npm run build` in `web/`: **10/10 static routes compiled successfully**.
+
+---
+
+### Session 10: Gateway Evidence Failure Handling & Grace Period Auto-Termination (`P5-03`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Fail-Closed Recording Pipeline & Buffering (`gateway/recorder.go`)**:
@@ -215,13 +243,13 @@ The following tasks are prioritized for execution:
 [Phase 3 Complete ✓] ──► [Phase 4 Ephemeral CA Complete ✓] ──► [Phase 5 Evidence & Web Console Active]
 ```
 
-### Priority 1: Pilot SOC Alerts & Health Monitoring (`P5-06`)
-- **Objective**: Configure pilot SOC alerts and health monitoring for capture loss, evidence delivery outage, lease renewal failure, and CA signing errors (`FR-10`, `NFR-08`, `T-07`, `T-10`).
-- **Target Files**: `src/ariba_pam/services/notifications.py`, `src/ariba_pam/api/internal/gateway.py`
-
-### Priority 2: Backup and Restore Rehearsal (`P5-07`)
+### Priority 1: Backup and Restore Rehearsal (`P5-07`)
 - **Objective**: Run backup and restore rehearsal, measure RTO and RPO, verify restored evidence, and confirm stale grants stay closed (`NFR-04`, `T-09`).
-- **Target Files**: `tests/test_backup_restore.py`
+- **Target Files**: `tests/test_backup_restore.py`, `src/ariba_pam/services/backup.py`
+
+### Priority 2: Drill Out-of-Band Emergency Access (`P5-08`)
+- **Objective**: Simulate PAM and IdP outage. Record scoped access, SOC notice, independent evidence, review, and cleanup (`FR-11`, `T-09`).
+- **Target Files**: `tests/test_emergency_breakglass.py`
 
 ---
 

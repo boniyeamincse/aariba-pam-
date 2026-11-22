@@ -41,6 +41,7 @@
 | P5-03 | Handle recording and audit delivery failure at the gateway | [gateway/recorder.go](../gateway/recorder.go), [gateway/session.go](../gateway/session.go), [gateway/server.go](../gateway/server.go), [gateway/gateway_test.go](../gateway/gateway_test.go) |
 | P5-04 | Add scoped audit search and recording playback | [src/ariba_pam/api/v1/recordings.py](../src/ariba_pam/api/v1/recordings.py), [web/components/player.tsx](../web/components/player.tsx), [tests/test_audit_exports.py](../tests/test_audit_exports.py) |
 | P5-05 | Add separately scoped recording and audit exports | [src/ariba_pam/api/v1/audit.py](../src/ariba_pam/api/v1/audit.py), [src/ariba_pam/api/v1/recordings.py](../src/ariba_pam/api/v1/recordings.py), [tests/test_audit_exports.py](../tests/test_audit_exports.py) |
+| P5-06 | Configure pilot SOC alerts and health monitoring | [src/ariba_pam/services/alerts.py](../src/ariba_pam/services/alerts.py), [src/ariba_pam/api/v1/alerts.py](../src/ariba_pam/api/v1/alerts.py), [src/ariba_pam/api/internal/gateway.py](../src/ariba_pam/api/internal/gateway.py), [tests/test_soc_alerts.py](../tests/test_soc_alerts.py) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.
 

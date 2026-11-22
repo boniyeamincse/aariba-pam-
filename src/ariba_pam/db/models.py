@@ -371,3 +371,27 @@ class IdempotencyRecord(Base):
     __table_args__ = (
         UniqueConstraint("actor_id", "operation", "idempotency_key", name="uq_actor_op_idempotency"),
     )
+
+
+class SOCAlert(Base):
+    """High-priority security alert dispatched to enterprise SOC/SIEM."""
+
+    __tablename__ = "soc_alerts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: generate_id("alt"))
+    alert_type: Mapped[str] = mapped_column(String(64), nullable=False)  # CAPTURE_FAILURE, EVIDENCE_DELIVERY_FAILURE, LEASE_RENEWAL_FAILURE, SIGNING_FAILURE, SOD_VIOLATION, UNSAFE_LAUNCH_BLOCKED
+    severity: Mapped[str] = mapped_column(String(32), nullable=False)  # CRITICAL, HIGH, WARNING
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    session_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    gateway_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    asset_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    details: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="open", nullable=False)  # open, acknowledged, resolved
+    acknowledged_by_id: Mapped[Optional[str]] = mapped_column(String(64), ForeignKey("users.id"), nullable=True)
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    acknowledged_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[acknowledged_by_id])
+
