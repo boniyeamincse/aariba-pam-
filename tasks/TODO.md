@@ -50,6 +50,5 @@ Prioritize these after the pilot review. See [future enhancements](../docs/18-FU
 
 | ID | Task | Depends on | Completion check |
 | --- | --- | --- | --- |
-| P8-01 | Validate control-plane and gateway failover | P5-10 | Measure availability and verify correct authorization during component failure |
 | P8-02 | Exercise rolling upgrades and rollback | P8-01 | Verify active-session handling, compatible migrations, and rollback under load |
 | P8-03 | Test recovery at the approved expanded capacity | P8-01 | Record restore, key recovery, and evidence retrieval timings for the larger environment |

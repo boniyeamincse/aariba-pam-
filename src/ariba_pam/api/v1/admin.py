@@ -31,6 +31,7 @@ from ariba_pam.services.wazuh import wazuh_adapter
 from ariba_pam.services.soc_adapter import soc_adapter
 from ariba_pam.services.idp import MultiIdPService, AMR_CLASSIFICATIONS
 from ariba_pam.services.itsm import itsm_adapter
+from ariba_pam.services.failover import failover_service
 
 router = APIRouter(prefix="/admin", tags=["Administration & Change Control"])
 
@@ -573,6 +574,65 @@ def test_validate_ticket(
     return {
         "validation_result": result.model_dump(),
         "adapter_status": itsm_adapter.get_status(),
+    }
+
+
+@router.get("/ha/status", response_model=Dict[str, Any])
+def get_ha_cluster_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Retrieve cluster High Availability topology, node health, and gateway zone redundancy (P8-01, ADR-017)."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if not any(r in user_roles for r in ("admin", "operator", "auditor", "custodian")):
+        raise ForbiddenException("Insufficient permissions to inspect cluster HA status", code="NOT_PERMITTED")
+
+    return failover_service.get_ha_status(db=db)
+
+
+@router.post("/ha/gateways/heartbeat", response_model=Dict[str, Any])
+def heartbeat_gateway_instance(
+    instance_id: str,
+    zone_id: str,
+    endpoint: str,
+    active_sessions: int = 0,
+    current_user: User = Depends(get_current_user),
+):
+    """Register or heartbeat an active gateway instance in a redundant zone."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if "admin" not in user_roles and "operator" not in user_roles:
+        raise ForbiddenException("Only administrators or operators can register gateway instances", code="NOT_PERMITTED")
+
+    inst = failover_service.register_gateway_instance(
+        instance_id=instance_id,
+        zone_id=zone_id,
+        endpoint=endpoint,
+        active_sessions=active_sessions,
+    )
+    return {
+        "status": "registered",
+        "instance_id": inst.instance_id,
+        "zone_id": inst.zone_id,
+        "endpoint": inst.endpoint,
+        "active_sessions": inst.active_sessions,
+    }
+
+
+@router.post("/ha/simulate-failover", response_model=Dict[str, Any])
+def simulate_ha_failover(
+    failed_node_id: str = "cp-node-01",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Simulate a control plane node failure and measure switchover and invariant preservation."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if "admin" not in user_roles:
+        raise ForbiddenException("Only administrators can execute simulated failover drills", code="NOT_PERMITTED")
+
+    sim_result = failover_service.simulate_node_failover(failed_node_id=failed_node_id)
+    return {
+        "simulation": sim_result,
+        "cluster_status": failover_service.get_ha_status(db=db),
     }
 
 

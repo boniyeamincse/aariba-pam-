@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -31,23 +33,132 @@ type RenewResponse struct {
 }
 
 // ControlPlaneClient communicates with the Ariba PAM control plane.
+// Supports multi-endpoint failover across redundant control plane instances.
 type ControlPlaneClient struct {
 	BaseURL    string
+	BaseURLs   []string
+	activeIdx  int
+	mu         sync.RWMutex
 	GatewayID  string
 	Secret     string
 	HTTPClient *http.Client
 }
 
 // NewControlPlaneClient initializes a client for internal control plane routes.
+// Accepts single URL or comma-separated URLs for multi-node clusters.
 func NewControlPlaneClient(baseURL, gatewayID, secret string) *ControlPlaneClient {
+	var urls []string
+	for _, u := range strings.Split(baseURL, ",") {
+		u = strings.TrimSpace(u)
+		if u != "" {
+			urls = append(urls, strings.TrimRight(u, "/"))
+		}
+	}
+	if len(urls) == 0 {
+		urls = []string{"http://localhost:8000"}
+	}
 	return &ControlPlaneClient{
-		BaseURL:   baseURL,
-		GatewayID: gatewayID,
-		Secret:    secret,
+		BaseURL:    urls[0],
+		BaseURLs:   urls,
+		GatewayID:  gatewayID,
+		Secret:     secret,
 		HTTPClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 	}
+}
+
+// NewControlPlaneClientWithEndpoints initializes a client with explicit multiple endpoints.
+func NewControlPlaneClientWithEndpoints(endpoints []string, gatewayID, secret string) *ControlPlaneClient {
+	var urls []string
+	for _, u := range endpoints {
+		u = strings.TrimSpace(u)
+		if u != "" {
+			urls = append(urls, strings.TrimRight(u, "/"))
+		}
+	}
+	if len(urls) == 0 {
+		urls = []string{"http://localhost:8000"}
+	}
+	return &ControlPlaneClient{
+		BaseURL:    urls[0],
+		BaseURLs:   urls,
+		GatewayID:  gatewayID,
+		Secret:     secret,
+		HTTPClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+	}
+}
+
+// GetCurrentEndpoint returns the currently active control plane base URL.
+func (c *ControlPlaneClient) GetCurrentEndpoint() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.BaseURL
+}
+
+// doRequest performs an HTTP request against the active control plane node with automatic failover.
+func (c *ControlPlaneClient) doRequest(ctx context.Context, method, path string, bodyBytes []byte) (*http.Response, []byte, error) {
+	c.mu.RLock()
+	endpoints := make([]string, len(c.BaseURLs))
+	copy(endpoints, c.BaseURLs)
+	startIdx := c.activeIdx
+	c.mu.RUnlock()
+
+	var lastErr error
+	n := len(endpoints)
+	for i := 0; i < n; i++ {
+		idx := (startIdx + i) % n
+		endpoint := endpoints[idx]
+		url := endpoint + path
+
+		var bodyReader io.Reader
+		if bodyBytes != nil {
+			bodyReader = bytes.NewReader(bodyBytes)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+		if err != nil {
+			return nil, nil, err
+		}
+		if bodyBytes != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		req.Header.Set("X-Gateway-Secret", c.Secret)
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("node %s connection error: %w", endpoint, err)
+			continue
+		}
+
+		// Failover on server unavailability (502, 503, 504) if additional endpoints exist
+		if (resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusGatewayTimeout) && i < n-1 {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("node %s returned status %d", endpoint, resp.StatusCode)
+			continue
+		}
+
+		respBody, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			lastErr = fmt.Errorf("node %s body read error: %w", endpoint, readErr)
+			continue
+		}
+
+		// Update active endpoint if failover succeeded
+		if idx != startIdx {
+			c.mu.Lock()
+			c.activeIdx = idx
+			c.BaseURL = endpoint
+			c.mu.Unlock()
+		}
+
+		return resp, respBody, nil
+	}
+
+	return nil, nil, fmt.Errorf("all %d control plane endpoints failed, last error: %w", n, lastErr)
 }
 
 // ConsumeLaunch atomically consumes a single-use launch capability.
@@ -60,20 +171,11 @@ func (c *ControlPlaneClient) ConsumeLaunch(ctx context.Context, launchToken stri
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/internal/v1/launches/consume", bytes.NewReader(reqBody))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Gateway-Secret", c.Secret)
-
-	resp, err := c.HTTPClient.Do(req)
+	resp, bodyBytes, err := c.doRequest(ctx, "POST", "/internal/v1/launches/consume", reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("control plane connection error: %w", err)
 	}
-	defer resp.Body.Close()
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("consume launch failed with status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
@@ -117,19 +219,11 @@ func (c *ControlPlaneClient) ConsumeLaunch(ctx context.Context, launchToken stri
 
 // RenewLease checks current grant status and extends the bounded lease deadline.
 func (c *ControlPlaneClient) RenewLease(ctx context.Context, sessionID string) (*RenewResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%s/internal/v1/sessions/%s/renew", c.BaseURL, sessionID), nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("X-Gateway-Secret", c.Secret)
-
-	resp, err := c.HTTPClient.Do(req)
+	resp, bodyBytes, err := c.doRequest(ctx, "POST", fmt.Sprintf("/internal/v1/sessions/%s/renew", sessionID), nil)
 	if err != nil {
 		return nil, fmt.Errorf("renewal connection failure: %w", err)
 	}
-	defer resp.Body.Close()
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("lease renewal rejected with status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
@@ -190,18 +284,10 @@ func (c *ControlPlaneClient) SendEventWithRecording(ctx context.Context, session
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%s/internal/v1/sessions/%s/events", c.BaseURL, sessionID), bytes.NewReader(bodyBytes))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Gateway-Secret", c.Secret)
-
-	resp, err := c.HTTPClient.Do(req)
+	resp, _, err := c.doRequest(ctx, "POST", fmt.Sprintf("/internal/v1/sessions/%s/events", sessionID), bodyBytes)
 	if err != nil {
 		return fmt.Errorf("event delivery failure: %w", err)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("gateway event delivery rejected with status %d", resp.StatusCode)
@@ -227,26 +313,17 @@ func (c *ControlPlaneClient) RetrieveVaultSecret(ctx context.Context, grantID, s
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/internal/v1/credentials/vault-secret", bytes.NewReader(reqBody))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Gateway-Secret", c.Secret)
-
-	resp, err := c.HTTPClient.Do(req)
+	resp, bodyBytes, err := c.doRequest(ctx, "POST", "/internal/v1/credentials/vault-secret", reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("control plane connection error: %w", err)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("vault secret retrieval rejected (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("vault secret retrieval rejected (status %d): %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var secretResp VaultSecretResponse
-	if err := json.NewDecoder(resp.Body).Decode(&secretResp); err != nil {
+	if err := json.Unmarshal(bodyBytes, &secretResp); err != nil {
 		return nil, fmt.Errorf("failed to decode vault secret response: %w", err)
 	}
 	return &secretResp, nil
@@ -282,30 +359,18 @@ func (c *ControlPlaneClient) CompileRDPTunnelParameters(ctx context.Context, gra
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/internal/v1/rdp/tunnel-parameters", bytes.NewReader(reqBody))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Gateway-Secret", c.Secret)
-
-	resp, err := c.HTTPClient.Do(req)
+	resp, bodyBytes, err := c.doRequest(ctx, "POST", "/internal/v1/rdp/tunnel-parameters", reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("control plane connection error: %w", err)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("RDP tunnel compilation rejected (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("RDP tunnel compilation rejected (status %d): %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var tunnelResp RDPTunnelResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tunnelResp); err != nil {
+	if err := json.Unmarshal(bodyBytes, &tunnelResp); err != nil {
 		return nil, fmt.Errorf("failed to decode RDP tunnel response: %w", err)
 	}
 	return &tunnelResp, nil
 }
-
-
-

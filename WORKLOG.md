@@ -9,9 +9,9 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Complete (`P7-01`, `P7-02`, `P7-03`, & `P7-04` Complete) · Phase 8 Active (`P8-01: Validate control-plane and gateway failover` Next)
-- **Control Plane Test Health**: `142 passed, 2 skipped` (`DEBUG=false pytest -v`)
-- **Gateway Test Health**: `15 passed` (`cd gateway && go test -v ./...`)
+- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Complete (`P7-01` to `P7-04` Complete) · Phase 8 Active (`P8-01: Validate control-plane and gateway failover` Complete · `P8-02: Exercise rolling upgrades and rollback` Next)
+- **Control Plane Test Health**: `148 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Gateway Test Health**: `17 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
 - **Database Migration State**: Alembic head (`0008_rdp_support.py`)
 - **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Multi-Custodian Quorum, Transactional Audit Outbox, Bidirectional Schema Migration Reversibility.
@@ -33,7 +33,38 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 22: ITSM Ticket Reference Validation, State Verification, Anti-Hijacking & Outage Fallback (`P7-04`) (Current)
+### Session 23: Multi-Node Control Plane Failover, Zone-Redundant Gateway Redundancy & HA Validation (`P8-01`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:
+     - Documented `ADR-017: Multi-Node Control Plane Failover and Zone-Redundant Gateway High Availability Validation`.
+     - Specified stateless multi-node Control Plane clustering behind load balancing, gateway client multi-endpoint automatic failover (< 1.5s detection, < 200ms switchover), zone-redundant gateway instance routing (least connections), persistence partition fail-closed default-deny enforcement, bounded lease survival (≤ 60s max risk window), and database row-level locking (`with_for_update`) preventing dual-launch token consumption races.
+  2. **System Architecture Documentation (`docs/03-SYSTEM-ARCHITECTURE.md`)**:
+     - Expanded Section 4 with High Availability & Failover Architecture, cluster topology diagram, stateless control plane pooling, gateway multi-endpoint rotation sequence, and failure domains & partition handling matrix.
+  3. **Gateway Client Multi-Endpoint Failover (`gateway/client.go`)**:
+     - Enhanced `ControlPlaneClient` with `BaseURLs []string`, `activeIdx`, mutex protection, and `NewControlPlaneClientWithEndpoints`.
+     - Implemented `doRequest` helper that automatically rotates across control plane nodes on network failures or HTTP 502/503/504 errors within a bounded failover retry budget.
+  4. **Go Gateway Failover Test Suite (`gateway/failover_test.go`)**:
+     - Added `TestControlPlaneClientMultiEndpointFailover` verifying automated failover from a failing primary node (503) to a healthy secondary node.
+     - Added `TestControlPlaneClientCompleteOutageHandling` verifying aggregated diagnostic error handling on complete cluster outage.
+  5. **Control Plane Failover Domain Service (`src/ariba_pam/services/failover.py`)**:
+     - Implemented `FailoverService` with:
+       - Control plane node registry, heartbeat monitoring, and automatic timeout detection.
+       - Zone-redundant gateway instance tracking with least-connections routing and degraded node eviction.
+       - Simulated node failover runner measuring detection latency, primary reassignment, and authorization continuity.
+       - Persistence health probe verifying strict fail-closed default-deny behavior during database disconnects.
+  6. **Admin HA Endpoints (`src/ariba_pam/api/v1/admin.py`)**:
+     - Added `GET /api/v1/admin/ha/status` returning cluster topology, healthy nodes, persistence status, and zone gateways.
+     - Added `POST /api/v1/admin/ha/gateways/heartbeat` for gateway instance registration.
+     - Added `POST /api/v1/admin/ha/simulate-failover` for administrative drill execution.
+  7. **Comprehensive Unit & Integration Test Suite (`tests/test_ha_failover.py`)**:
+     - 6 tests verifying multi-node CP registry, gateway zone least-connections routing, simulated failover metrics (< 1.5s detection), persistence partition fail-closed invariance, atomic single-use launch token race protection (`with_for_update`), and admin HA endpoints RBAC.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **148 passed, 2 skipped** (in 11.79s).
+  - `cd gateway && go test -v ./...`: **17 passed** (in 4.47s).
+  - `cd web && npm run build`: **10/10 static routes compiled successfully**.
+
+### Session 22: ITSM Ticket Reference Validation, State Verification, Anti-Hijacking & Outage Fallback (`P7-04`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:

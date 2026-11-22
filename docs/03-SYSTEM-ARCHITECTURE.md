@@ -106,11 +106,64 @@ Ariba PAM enforces strict physical and logical network separation:
 
 ---
 
-## 4. Failure Domains & Partition Handling
+## 4. Failure Domains, High Availability & Failover Architecture
+
+Ariba PAM is architected to satisfy NFR-08 (99.95% availability, RTO ≤ 15m, RPO ≤ 1m) without sacrificing Zero Standing Privilege (ZSP) invariants or default-deny security controls.
+
+```
+                             ┌──────────────────────────────────────┐
+                             │       Workforce / API Ingress        │
+                             │  (HTTPS:443 Load Balancer with Probes)
+                             └──────────────────┬───────────────────┘
+                                                │
+                     ┌──────────────────────────┴──────────────────────────┐
+                     ▼                                                     ▼
+      ┌─────────────────────────────┐                       ┌─────────────────────────────┐
+      │ Control Plane Node 1 (Active)│                       │ Control Plane Node 2 (Active)│
+      │   - Stateless REST API      │                       │   - Stateless REST API      │
+      │   - Health Probe: /ready    │                       │   - Health Probe: /ready    │
+      └──────────────┬──────────────┘                       └──────────────┬──────────────┘
+                     │                                                     │
+                     └──────────────────────────┬──────────────────────────┘
+                                                ▼
+                             ┌──────────────────────────────────────┐
+                             │    Transactional Persistence Pool    │
+                             │ PostgreSQL HA Cluster (Row Locking)  │
+                             └──────────────────▲───────────────────┘
+                                                │
+                     ┌──────────────────────────┴──────────────────────────┐
+                     │                                                     │
+      ┌──────────────┴──────────────┐                       ┌──────────────┴──────────────┐
+      │   Gateway Zone 1 (Node A)   │                       │   Gateway Zone 1 (Node B)   │
+      │   - Primary Ingress Proxy   │                       │   - Redundant Ingress Proxy │
+      │   - Multi-CP Failover Client│                       │   - Multi-CP Failover Client│
+      └─────────────────────────────┘                       └─────────────────────────────┘
+```
+
+### High Availability Invariants
+
+1. **Stateless Multi-Node Control Plane**:
+   - Multiple `ariba-pam-app` instances run concurrently behind an enterprise reverse proxy / load balancer.
+   - All state mutations (request submissions, approvals, grants, and launches) are atomically guarded by PostgreSQL row-level locks (`with_for_update`) and idempotency checks (`IdempotencyService`), preventing race conditions across cluster nodes.
+   - Liveness (`/health`) and Readiness (`/ready`) probes evict degraded nodes within 3 consecutive probe failures (≤ 1.5s detection latency).
+
+2. **Gateway Multi-Endpoint Failover**:
+   - The Go Session Gateway (`ControlPlaneClient`) maintains an ordered list of control plane endpoints (`BaseURLs`).
+   - If the active control plane node becomes unreachable (network timeout, TCP reset, or HTTP 502/503/504), the client rotates to surviving cluster nodes within a 2.0s failover budget before falling back to local lease expiration.
+   - Zero split-brain: Even during transient network partitions, active sessions are governed by local lease timers (`min(lease_deadline, grant_expiry)` ≤ 60s). If all control plane nodes remain unreachable through the lease period, the gateway independently terminates connections locally.
+
+3. **Zone-Redundant Gateway Redundancy**:
+   - Each `GatewayZone` supports multiple active gateway instances heartbeating to the control plane.
+   - The Control Plane tracks gateway health and routes new session launches to surviving gateways in the target zone if a gateway instance fails.
+   - Atomic Single-Use Token: Multiple gateways attempting to consume the same launch token simultaneously are protected by database row-level locking (`with_for_update`), guaranteeing exactly one gateway acquires the lease and starts the session while any redundant attempt receives `409 Conflict`.
+
+4. **Failure Domains & Partition Handling Matrix**:
 
 | Failure Scenario | Control Plane Behavior | Gateway Behavior | User Experience |
 | :--- | :--- | :--- | :--- |
-| **Control Plane Outage** | Unreachable for new requests or approvals. | Active sessions continue safely until current lease deadline (≤ 60s). Ongoing lease renewals fail, triggering orderly local termination. | Active users see a grace period warning and connection terminates at lease expiry. New logins blocked. |
-| **Network Partition (Gateway isolated)** | Reconciler flags gateway as unreachable. Marks pending sessions after timeout. | Gateway fails to renew lease. Local timer reaches expiry and immediately closes client and target sockets. | Connection severed precisely at lease boundary. No unauthorized standing access remains. |
+| **Primary CP Node Crash** | Load balancer detects failed `/ready` probe; routes traffic to secondary node (< 1.5s). | Gateway client detects TCP error / 503; automatically switches to secondary node (< 200ms). | Transparent session continuation. No user disconnection. |
+| **Complete CP Outage** | Unreachable for new requests or approvals. Returns 503 (fail-closed). | Active sessions continue safely until local lease deadline (≤ 60s). Ongoing lease renewals fail, triggering orderly local termination. | Active users see grace period warning; session severs at lease deadline. Zero standing access. |
+| **Network Partition (Gateway isolated)** | Reconciler flags gateway as unreachable after missed heartbeats. Sessions marked `terminated`. | Gateway fails to renew lease. Local timer reaches expiry and immediately closes client and target sockets. | Connection severed precisely at lease boundary. No unauthorized standing access remains. |
+| **Persistence Pool Outage** | Readiness probe `/ready` returns 503. All mutating API routes fail closed (`SERVICE_UNAVAILABLE`). | Continues active sessions up to remaining local lease buffer (≤ 60s). | New requests and approvals fail closed; users cannot bypass authorization checks. |
 | **Evidence Store Outage** | Records operational exception; denies new session launches requiring mandatory capture. | Gateway buffers keystrokes up to 10 MB. If buffer fills or outage exceeds 30s, forwarding pauses and session terminates fail-closed. | User sees terminal pause message; session terminates if storage is not restored. Forensics preserved. |
 | **IdP Outage** | Blocks routine workforce logins. Emergency access path invoked. | Active sessions continue until grant expiry or operator intervention. | Existing approved sessions proceed; new requests require break-glass emergency activation. |
