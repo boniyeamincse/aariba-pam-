@@ -32,5 +32,6 @@
 | P3-06 | Revoke grants and terminate scoped sessions | [src/ariba_pam/api/v1/grants.py](../src/ariba_pam/api/v1/grants.py), [src/ariba_pam/api/v1/sessions.py](../src/ariba_pam/api/v1/sessions.py), [tests/test_idp_disablement.py](../tests/test_idp_disablement.py) |
 | P3-07 | Propagate IdP disablement to grants and active sessions | [src/ariba_pam/api/v1/auth.py](../src/ariba_pam/api/v1/auth.py), [tests/test_idp_disablement.py](../tests/test_idp_disablement.py) |
 | P3-08 | Reconcile gateway status and show termination progress | [src/ariba_pam/api/internal/gateway.py](../src/ariba_pam/api/internal/gateway.py), [src/ariba_pam/api/v1/sessions.py](../src/ariba_pam/api/v1/sessions.py), [tests/test_idp_disablement.py](../tests/test_idp_disablement.py) |
+| P3-09 | Verify the gateway lab milestone | [tests/test_gateway_milestone.py](../tests/test_gateway_milestone.py), [gateway/gateway_test.go](../gateway/gateway_test.go) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.

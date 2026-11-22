@@ -32,13 +32,7 @@ All Phase 2 tasks (P2-01 through P2-09) and their implementation evidence have b
 
 ## Phase 3 · SSH gateway in the lab
 
-Use the [SSH gateway specification](../specifications/modules/ssh-gateway.md). All connections in this phase use isolated synthetic hosts and lab credentials.
-
-| ID | Task | Depends on | Check or reference | Completion check |
-| --- | --- | --- | --- | --- |
-| P3-09 | Verify the gateway lab milestone | P3-07, P3-08 | Phase 3 exit | Record evidence for allowed SSH, denied paths, launch replay, expiry, revocation, and partition tests |
-
-Completed Phase 3 tasks (P3-01 through P3-08) with verification evidence have been moved to [COMPLETED.md](COMPLETED.md).
+All Phase 3 tasks (P3-01 through P3-09) and their implementation evidence have been completed and verified in [COMPLETED.md](COMPLETED.md).
 
 ## Phase 4 · Credential custody
 
