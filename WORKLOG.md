@@ -9,8 +9,8 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Active (`P7-01` & `P7-02` Complete · `P7-03: Evaluate an additional IdP` Next)
-- **Control Plane Test Health**: `123 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Active (`P7-01`, `P7-02`, & `P7-03` Complete · `P7-04: Validate an ITSM ticket reference integration` Next)
+- **Control Plane Test Health**: `132 passed, 2 skipped` (`DEBUG=false pytest -v`)
 - **Gateway Test Health**: `15 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
 - **Database Migration State**: Alembic head (`0008_rdp_support.py`)
@@ -33,7 +33,37 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 20: Ariba SOC Event Adapter with Priority Routing, Correlation Tracking & Failure Monitoring (`P7-02`) (Current)
+### Session 21: Multi-Provider IdP Evaluation, AMR Assurance Normalization & Disablement Verification (`P7-03`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:
+     - Documented `ADR-015: Support Multi-Provider Enterprise Identity Federation and Provider-Specific Assurance Normalization`.
+     - Specified directory federation across primary pilot OIDC and secondary Microsoft Entra ID (with Okta compatibility), AMR claim normalization against NIST SP 800-63B Authenticator Assurance Levels (AAL1-AAL3), and multi-provider account disablement propagation.
+  2. **Identity & Access Management Documentation (`docs/06-IDENTITY-AND-ACCESS-MANAGEMENT.md`)**:
+     - Added Section 5 detailing multi-provider identity anchor invariants `(idp_issuer, idp_subject)`, AMR claim normalization matrix, and deprovisioning ingestion (Microsoft Graph notifications and SCIM 2.0).
+  3. **Integration Architecture Documentation (`docs/16-INTEGRATION-ARCHITECTURE.md`)**:
+     - Updated Section 1 to document multi-provider directory federation, required claim schemas (`sub` vs `oid`), and provider-neutral deprovisioning webhooks.
+  4. **Multi-IdP Configuration Settings (`src/ariba_pam/config.py`)**:
+     - Added `secondary_idp_enabled`, `secondary_idp_name`, `secondary_idp_issuer`, `secondary_idp_audience`, and `secondary_idp_assurance_mode`.
+  5. **Multi-IdP Domain Service (`src/ariba_pam/services/idp.py`)**:
+     - Built `MultiIdPService` providing:
+       - Trusted provider registry (`get_trusted_providers`, `resolve_provider_by_issuer`, `is_issuer_trusted`).
+       - NIST SP 800-63B AMR normalization: categorizes claims into `AAL3_PHISHING_RESISTANT`, `AAL2_MULTI_FACTOR`, `AAL1_SINGLE_FACTOR`, and `REJECTED_INSECURE`. Enforces phishing-resistant MFA across all privileged operations.
+       - Heterogeneous lifecycle event normalization: parses standard OIDC webhooks, Microsoft Graph change notifications (`accountEnabled == False`), and SCIM 2.0 PATCH deprovisioning requests into a canonical contract.
+       - Disablement execution: revokes grants, terminates sessions (`status="terminating"`), logs atomic outbox audit events, and maintains the ≤ 60s NFR-01 SLA.
+  6. **Authentication API Layer Enhancements (`src/ariba_pam/services/auth.py` & `src/ariba_pam/api/v1/auth.py`)**:
+     - Supported workforce authentication for secondary IdP principals with phishing-resistant assurance verification.
+     - Unified `/api/v1/auth/idp-events` router using `MultiIdPService` and idempotent deduplication.
+  7. **Admin IdP Federation Endpoint (`src/ariba_pam/api/v1/admin.py`)**:
+     - Added `GET /api/v1/admin/integrations/idp/status` returning provider catalog, assurance rules, and policy settings.
+  8. **Comprehensive Unit & Integration Test Suite (`tests/test_multi_idp_evaluation.py`)**:
+     - 9 tests verifying provider registry, AMR normalization, Entra ID user authentication, insufficient assurance rejection, rapid disablement propagation and reconciliation, Microsoft Graph format normalization, SCIM 2.0 format normalization, idempotent replay protection, and admin endpoint RBAC.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **132 passed, 2 skipped** (in 6.70s).
+  - `cd gateway && go test -v ./...`: **15 passed** (in 4.47s).
+  - `cd web && npm run build`: **10/10 static routes compiled successfully**.
+
+### Session 20: Ariba SOC Event Adapter with Priority Routing, Correlation Tracking & Failure Monitoring (`P7-02`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:

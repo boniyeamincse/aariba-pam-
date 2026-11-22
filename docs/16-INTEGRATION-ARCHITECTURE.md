@@ -6,11 +6,22 @@ Ariba PAM integrates into enterprise security, identity, ticketing, and event ec
 
 ---
 
-## 1. Enterprise Identity Provider (OIDC / SCIM)
+## 1. Enterprise Identity Providers (OIDC / SCIM / Microsoft Entra ID) (P7-03, ADR-015)
 
-- **Protocols**: OpenID Connect Core 1.0 (Authorization Code Flow with PKCE for portal; synthetic JSON for lab automation).
-- **Required Claims**: `sub` (stable unique user ID), `email`, `amr` (authentication method references including `fido2`), `exp`, `iss`.
-- **Inbound Webhook**: Consumes real-time account lifecycle webhooks (`user.disabled`, `user.deprovisioned`) with HMAC webhook signature validation.
+- **Federation Protocols**: OpenID Connect Core 1.0 (Authorization Code Flow with PKCE for portal; synthetic JSON for lab automation) and SCIM 2.0 / Microsoft Graph change notification adapters.
+- **Supported Identity Providers**:
+  - **Primary Pilot IdP**: OpenID Connect provider (`https://idp.lab.ariba.internal`).
+  - **Microsoft Entra ID (Secondary Evaluation)**: Microsoft identity platform v2.0 (`https://login.microsoftonline.com/{tenant_id}/v2.0`). Mapped via immutable object ID (`oid`).
+  - **Okta Enterprise**: Okta OIDC/OAuth 2.0 (`https://{org}.okta.com`). Mapped via internal user ID (`00u...`).
+- **Required Claims & Identity Anchor**:
+  - Identity anchor: Composite key `(idp_issuer, idp_subject)` prevents account collision across multiple federated directories.
+  - Required claims: `sub` / `oid` (immutable subject), `email` / `preferred_username`, `amr` (authentication method references), `exp`, `iss`.
+- **Assurance Normalization**:
+  - Translates provider-specific `amr` claims (`fido`, `fido2`, `webauthn`, `hwk`, `x509`) to NIST SP 800-63B Authenticator Assurance Level 3 (AAL3) Phishing-Resistant MFA.
+  - Single-factor (`pwd`) and insecure telephony (`sms`) are denied for privileged operations.
+- **Inbound Webhook & Deprovisioning Lifecycle**:
+  - Ingests real-time account lifecycle events (`user.disabled`, `user.deprovisioned`, SCIM `active=false`, Microsoft Graph `accountEnabled=false`) with HMAC signature validation and idempotent deduplication.
+  - Propagates instantaneous grant revocation and active session termination within the ≤ 60s NFR-01 SLA.
 
 ---
 

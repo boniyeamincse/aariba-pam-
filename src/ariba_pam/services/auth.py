@@ -10,6 +10,7 @@ from ariba_pam.db.models import User
 from ariba_pam.core.security import verify_session_token, create_session_token
 from ariba_pam.core.errors import UnauthorizedException
 from ariba_pam.services.audit import AuditService
+from ariba_pam.services.idp import MultiIdPService
 
 
 class AuthService:
@@ -24,9 +25,21 @@ class AuthService:
         amr: list,
         correlation_id: str,
     ) -> Dict[str, Any]:
-        """Look up a pre-enrolled synthetic identity and issue a lab session."""
-        if settings.environment != "lab" or idp_issuer != settings.idp_issuer:
-            raise UnauthorizedException("Identity not recognized or not enrolled", code="UNKNOWN_IDENTITY")
+        """Look up a pre-enrolled synthetic identity across trusted IdPs and issue a lab session."""
+        if settings.environment != "lab":
+            raise UnauthorizedException("Authentication endpoint unavailable outside lab environment", code="NOT_PERMITTED")
+
+        if not MultiIdPService.is_issuer_trusted(idp_issuer):
+            raise UnauthorizedException("Identity issuer not recognized or not trusted", code="UNKNOWN_IDENTITY")
+
+        provider = MultiIdPService.resolve_provider_by_issuer(idp_issuer) or "pilot_oidc"
+        is_valid_assurance, reason = MultiIdPService.validate_assurance(
+            provider=provider,
+            raw_amr=amr,
+            require_phishing_resistant=settings.require_phishing_resistant_mfa,
+        )
+        if not is_valid_assurance:
+            raise UnauthorizedException(reason, code="INSUFFICIENT_ASSURANCE")
 
         stmt = select(User).where(User.idp_issuer == idp_issuer, User.idp_subject == idp_subject)
         user = db.scalar(stmt)
@@ -51,7 +64,9 @@ class AuthService:
             payload={
                 "email": user.email,
                 "idp_issuer": idp_issuer,
+                "provider": provider,
                 "amr": amr,
+                "assurance_mode": "phishing_resistant",
             },
         )
         db.commit()

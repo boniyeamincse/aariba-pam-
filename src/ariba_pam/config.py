@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     soc_timeout_seconds: float = 5.0
     soc_verify_ssl: bool = True
 
+    # Secondary Identity Provider Evaluation (P7-03, ADR-015)
+    secondary_idp_enabled: bool = True
+    secondary_idp_name: str = "microsoft_entra"
+    secondary_idp_issuer: str = "https://login.microsoftonline.com/tenant-corp/v2.0"
+    secondary_idp_audience: str = "ariba-pam-control-plane-entra"
+    secondary_idp_assurance_mode: str = "phishing_resistant"
+
     # CORS
     cors_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 

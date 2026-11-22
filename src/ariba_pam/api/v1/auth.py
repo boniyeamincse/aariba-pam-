@@ -1,6 +1,6 @@
 """Authentication and identity routes."""
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, Depends, Header, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
@@ -13,17 +13,29 @@ from ariba_pam.services.audit import AuditService
 from ariba_pam.core.idempotency import IdempotencyService
 from ariba_pam.db.base import utc_now
 from ariba_pam.api.schemas import UserProfileResponse
+from ariba_pam.services.idp import MultiIdPService
 
 router = APIRouter(tags=["Authentication & Identity"])
 
 
 class IdPLifecycleEventInput(BaseModel):
-    event_id: str
-    event_type: str
-    idp_issuer: str | None = None
-    idp_subject: str | None = None
-    email: str | None = None
-    timestamp: str | None = None
+    model_config = {"extra": "allow"}
+
+    event_id: Optional[str] = None
+    event_type: Optional[str] = None
+    idp_issuer: Optional[str] = None
+    idp_subject: Optional[str] = None
+    email: Optional[str] = None
+    timestamp: Optional[str] = None
+    # Microsoft Graph change notification fields
+    id: Optional[str] = None
+    subscriptionId: Optional[str] = None
+    resourceData: Optional[Dict[str, Any]] = None
+    # SCIM 2.0 fields
+    schemas: Optional[List[str]] = None
+    Operations: Optional[List[Dict[str, Any]]] = None
+    externalId: Optional[str] = None
+    userName: Optional[str] = None
 
 
 
@@ -99,91 +111,33 @@ def idp_lifecycle_event(
     Deduplicates events, invalidates identity, immediately revokes active grants,
     and terminates associated sessions within the 60s NFR-01 propagation window.
     """
+    raw_dict = payload.model_dump()
+    norm_event = MultiIdPService.normalize_lifecycle_event(raw_dict)
+
     cached = IdempotencyService.check_idempotency(
         db=db,
         actor_id="idp",
         operation="idp_lifecycle_event",
-        idempotency_key=payload.event_id,
-        payload=payload.model_dump(),
+        idempotency_key=norm_event.event_id,
+        payload=raw_dict,
     )
     if cached:
         status_code, cached_payload = cached
         response.status_code = status_code
         return cached_payload
 
-    # Look up user by issuer+subject or email
-    user = None
-    if payload.idp_subject:
-        issuer = payload.idp_issuer or settings.idp_issuer
-        user = db.query(User).filter(User.idp_issuer == issuer, User.idp_subject == payload.idp_subject).first()
-    if not user and payload.email:
-        user = db.query(User).filter(User.email == payload.email).first()
-
-    if not user:
-        raise NotFoundException("User not found for IdP event", code="UNKNOWN_IDENTITY")
-
-    now = utc_now()
-    revoked_count = 0
-    terminating_count = 0
-
-    if payload.event_type in ("user.disabled", "user.deprovisioned"):
-        user.is_active = False
-
-        # Revoke active and scheduled grants
-        active_grants = (
-            db.query(AccessGrant)
-            .filter(AccessGrant.requester_id == user.id, AccessGrant.status.in_(["active", "scheduled"]))
-            .all()
-        )
-        revoked_count = len(active_grants)
-        for grant in active_grants:
-            grant.status = "revoked"
-            grant.revocation_reason = f"IdP identity disablement ({payload.event_type})"
-            grant.revoked_at = now
-
-            # Mark active sessions under these grants as terminating
-            active_sessions = (
-                db.query(AccessSession)
-                .filter(AccessSession.grant_id == grant.id, AccessSession.status.in_(["starting", "active"]))
-                .all()
-            )
-            for s in active_sessions:
-                s.status = "terminating"
-                s.termination_reason = f"IdP identity disablement ({payload.event_type})"
-                terminating_count += 1
-
-        AuditService.record_event(
-            db=db,
-            event_type="IDP_USER_DISABLED",
-            correlation_id=x_correlation_id,
-            actor_id=user.id,
-            payload={
-                "event_id": payload.event_id,
-                "event_type": payload.event_type,
-                "user_id": user.id,
-                "email": user.email,
-                "revoked_grants_count": revoked_count,
-                "terminating_sessions_count": terminating_count,
-                "source_timestamp": payload.timestamp,
-            },
-        )
-
-    result = {
-        "status": "processed",
-        "event_id": payload.event_id,
-        "event_type": payload.event_type,
-        "user_id": user.id,
-        "is_active": user.is_active,
-        "revoked_grants_count": revoked_count,
-        "terminating_sessions_count": terminating_count,
-    }
+    result = MultiIdPService.execute_disablement(
+        db=db,
+        event=norm_event,
+        correlation_id=x_correlation_id,
+    )
 
     IdempotencyService.save_idempotency(
         db=db,
         actor_id="idp",
         operation="idp_lifecycle_event",
-        idempotency_key=payload.event_id,
-        payload=payload.model_dump(),
+        idempotency_key=norm_event.event_id,
+        payload=raw_dict,
         response_code=200,
         response_payload=result,
     )

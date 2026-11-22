@@ -4,6 +4,7 @@ from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import update
+from ariba_pam.config import settings
 from ariba_pam.db.session import get_db
 from ariba_pam.db.models import User, AdminChangeProposal, Asset, TargetAccount, BackupRehearsalRecord
 from ariba_pam.services.auth import get_current_user
@@ -28,6 +29,7 @@ from ariba_pam.services.policies import (
 from ariba_pam.services.vault import VaultCredentialService
 from ariba_pam.services.wazuh import wazuh_adapter
 from ariba_pam.services.soc_adapter import soc_adapter
+from ariba_pam.services.idp import MultiIdPService, AMR_CLASSIFICATIONS
 
 router = APIRouter(prefix="/admin", tags=["Administration & Change Control"])
 
@@ -515,6 +517,29 @@ def reset_soc_failures(
         "message": "SOC adapter failure counter and circuit breaker successfully reset",
         "metrics": soc_adapter.get_metrics(),
     }
+
+
+@router.get("/integrations/idp/status", response_model=Dict[str, Any])
+def get_idp_federation_status(
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve enterprise IdP federation catalog, secondary providers, and assurance policies (P7-03, ADR-015)."""
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    if not any(r in user_roles for r in ("admin", "operator", "auditor", "custodian")):
+        raise ForbiddenException("Insufficient permissions to inspect IdP federation status", code="NOT_PERMITTED")
+
+    providers = MultiIdPService.get_trusted_providers()
+    serializable_rules = {
+        prov: {tier: list(methods) for tier, methods in catalog.items()}
+        for prov, catalog in AMR_CLASSIFICATIONS.items()
+    }
+    return {
+        "primary_issuer": settings.idp_issuer,
+        "trusted_providers": providers,
+        "assurance_rules": serializable_rules,
+        "phishing_resistant_mfa_required": settings.require_phishing_resistant_mfa,
+    }
+
 
 
 

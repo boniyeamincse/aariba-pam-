@@ -50,7 +50,6 @@ Prioritize these after the pilot review. See [future enhancements](../docs/18-FU
 
 | ID | Task | Depends on | Completion check |
 | --- | --- | --- | --- |
-| P7-03 | Evaluate an additional IdP | P5-10 | Document assurance mapping and repeat disablement checks for the selected provider |
 | P7-04 | Validate an ITSM ticket reference integration | P5-10 | Verify ticket validation, permissions, timeouts, and the access policy when the integration is unavailable |
 | P8-01 | Validate control-plane and gateway failover | P5-10 | Measure availability and verify correct authorization during component failure |
 | P8-02 | Exercise rolling upgrades and rollback | P8-01 | Verify active-session handling, compatible migrations, and rollback under load |
