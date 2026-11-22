@@ -36,11 +36,9 @@ Use the [SSH gateway specification](../specifications/modules/ssh-gateway.md). A
 
 | ID | Task | Depends on | Check or reference | Completion check |
 | --- | --- | --- | --- | --- |
-| P3-02 | Issue a short-lived one-time launch authorization | P3-01 | FR-05, T-04 | Current policy, grant ownership, gateway mapping, and time window are checked. Launch secrets stay out of URLs and logs |
-| P3-03 | Atomically consume a launch and reserve a starting session | P3-02 | FR-05, T-04 | Concurrent consumption produces at most one starting session. Expired, revoked, and mismatched launches are denied |
 | P3-09 | Verify the gateway lab milestone | P3-07, P3-08 | Phase 3 exit | Record evidence for allowed SSH, denied paths, launch replay, expiry, revocation, and partition tests |
 
-Completed Phase 3 tasks (P3-01, P3-04, P3-05, P3-06, P3-07, P3-08) with verification evidence have been moved to [COMPLETED.md](COMPLETED.md).
+Completed Phase 3 tasks (P3-01 through P3-08) with verification evidence have been moved to [COMPLETED.md](COMPLETED.md).
 
 ## Phase 4 · Credential custody
 

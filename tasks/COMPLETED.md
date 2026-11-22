@@ -25,6 +25,8 @@
 | P2-08 | Build requester and approver portal flows | [src/ariba_pam/portal_assets/catalog.html](../src/ariba_pam/portal_assets/catalog.html), [src/ariba_pam/portal_assets/catalog.js](../src/ariba_pam/portal_assets/catalog.js), [tests/test_portal_flows.py](../tests/test_portal_flows.py) |
 | P2-09 | Verify the first approval milestone | [tests/test_workflow.py](../tests/test_workflow.py), [tests/test_notifications.py](../tests/test_notifications.py) |
 | P3-01 | Start a gateway process with a zone-bound service identity | [gateway/server.go](../gateway/server.go), [gateway/config.go](../gateway/config.go) |
+| P3-02 | Issue a short-lived one-time launch authorization | [src/ariba_pam/api/v1/grants.py](../src/ariba_pam/api/v1/grants.py), [tests/test_workflow.py](../tests/test_workflow.py) |
+| P3-03 | Atomically consume a launch and reserve a starting session | [src/ariba_pam/api/internal/gateway.py](../src/ariba_pam/api/internal/gateway.py), [tests/test_workflow.py](../tests/test_workflow.py) |
 | P3-04 | Connect to an approved lab host over interactive SSH & verify host identity before authentication | [gateway/hostkey.go](../gateway/hostkey.go), [gateway/gateway_test.go](../gateway/gateway_test.go) |
 | P3-05 | Apply gateway leases and local expiry | [gateway/session.go](../gateway/session.go), [gateway/gateway_test.go](../gateway/gateway_test.go) |
 | P3-06 | Revoke grants and terminate scoped sessions | [src/ariba_pam/api/v1/grants.py](../src/ariba_pam/api/v1/grants.py), [src/ariba_pam/api/v1/sessions.py](../src/ariba_pam/api/v1/sessions.py), [tests/test_idp_disablement.py](../tests/test_idp_disablement.py) |

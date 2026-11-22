@@ -1,0 +1,54 @@
+# Ariba PAM AI Developer Rules (.cursorrules / Universal AI Rules)
+
+You are an expert systems engineer and security architect pair-programming on Ariba PAM, an enterprise Zero Standing Privilege (ZSP) Privileged Access Management platform.
+
+All AI coding assistants (Antigravity, Codex, Copilot, OpenCode, Claude, Cursor) must adhere strictly to these non-negotiable rules.
+
+---
+
+## 1. Core Architectural Invariants
+
+1. **Clean Layered Architecture (Strict Separation of Concerns)**:
+   - **`api/` (Presentation Layer)**: Handles HTTP validation, DTO transformation (`schemas.py`), calls domain services, and returns responses. **NEVER execute raw database queries or complex business logic inside API endpoints.**
+   - **`services/` (Domain Business Layer)**: Pure domain logic, state machines, policy enforcement, and atomic database commits.
+   - **`core/` (Cross-Cutting Infrastructure)**: Reusable utilities (scoping engine, security/cryptography, idempotency, error definitions).
+   - **`db/` (Persistence Layer)**: SQLAlchemy ORM entity models, migrations (`alembic/`), database sessions.
+   - **`gateway/` (Go SSH Proxy Layer)**: High-concurrency Go bastion proxy, host pinning, local lease termination, asciinema capture.
+   - **`web/` (Next.js Web Console)**: React 18/19, TypeScript, Tailwind CSS, shadcn/ui.
+
+2. **Security Invariants**:
+   - **Default Deny**: Every action is blocked unless explicitly permitted by an active, matching access policy and user scope.
+   - **Identifier Concealment (Anti-Enumeration)**: If a user queries an asset, request, or session outside their assigned resource scope, **always return HTTP 404 Not Found** (never HTTP 403 Forbidden).
+   - **Separation of Duties (SoD)**:
+     - A requester can never approve their own request.
+     - An approver can never approve a request where they are the target session user.
+     - Custodian partition: PAM Administrators cannot access evidence storage or CA private signing keys.
+   - **Transactional Audit Outbox**: Every mutating state change must atomically record an audit event in `audit_outbox` in the *same* database transaction.
+   - **Idempotency**: All mutating endpoints must accept and enforce `X-Idempotency-Key` deduplication.
+   - **No Hardcoded Secrets**: Use synthetic lab fixtures only; real credentials must never enter source control.
+
+---
+
+## 2. Coding & Implementation Guidelines
+
+- **Python**:
+  - Python 3.11+, full type annotations (`mypy` compliant).
+  - Pydantic v2 schemas for all API inputs and outputs.
+  - SQLAlchemy 2.0 select syntax (`db.execute(select(Model)...)`).
+  - All public functions must have docstrings and descriptive error handling.
+- **Go**:
+  - Idiomatic Go, error wrapping with `%w`, zero goroutine leaks on connection teardown.
+  - Context cancellation propagation for all timeouts and lease limits.
+- **Testing Standard**:
+  - Every new feature or bugfix must be accompanied by comprehensive tests in `tests/` or `gateway/gateway_test.go`.
+  - Always verify with: `DEBUG=false pytest -v` and `cd gateway && go test -v ./...`.
+
+---
+
+## 3. Workflow & Session Continuity
+
+1. At the start of a turn, always consult `WORKLOG.md` to see the current active milestone and pick the next unblocked task.
+2. When completing a task, update `WORKLOG.md` with:
+   - Task ID and description.
+   - Files created or modified.
+   - Verification test evidence.
