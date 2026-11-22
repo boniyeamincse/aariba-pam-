@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added Requester and Approver portal flows (`/portal`) with tabbed workspace, access request submission, request revision amendment, cancellation, and SSH session launch dialog (P2-08).
+- Added Approver queue review interface with exact revision presentation, approval/rejection recording, and stale-decision conflict detection and recovery (FR-04, T-02, P2-08).
+- Implemented `GET /api/v1/sessions/{session_id}` endpoint with server-side scoping and out-of-scope 404 concealment.
+- Implemented IdP lifecycle event handler (`POST /api/v1/auth/idp-events`) propagating user account disablement to immediately revoke active/scheduled grants, mark linked sessions for termination, reject ongoing gateway renewals with HTTP 409, and reject subsequent auth calls (P3-07, T-01).
+- Guarded gateway session event reconciliation against late or duplicate events reopening ended sessions (P3-08).
 - Added the lab sign-in and scoped asset catalog at `/portal`, with synthetic fixtures and browser tests.
 - Restricted synthetic sign-in to the lab environment and to pre-enrolled identities.
 - Added independently reviewed per-asset access policies. Request approvals and new session launches now require a current published policy version.

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Asset catalog · Ariba PAM</title>
+  <title>Portal · Ariba PAM</title>
   <link rel="stylesheet" href="/portal/catalog.css">
   <script type="module" src="/portal/catalog.js"></script>
 </head>
@@ -17,8 +17,8 @@
   <main>
     <div class="page-heading">
       <div>
-        <h1>Asset catalog</h1>
-        <p>Browse the systems and accounts available to your identity.</p>
+        <h1>Ariba PAM Portal</h1>
+        <p id="page-subtitle">Browse systems, manage access requests, and review pending approvals.</p>
       </div>
       <button id="sign-out" class="secondary" type="button" hidden>Sign out</button>
     </div>
@@ -39,16 +39,136 @@
     </section>
 
     <p id="status" class="status" role="status" aria-atomic="true"></p>
-    <section id="catalog" class="panel" aria-labelledby="catalog-title" hidden>
-      <div class="catalog-header">
-        <div>
-          <h2 id="catalog-title">Permitted assets</h2>
-          <p id="identity"></p>
+
+    <!-- Portal Authenticated Workspace -->
+    <div id="portal-workspace" hidden>
+      <nav id="portal-nav" class="nav-tabs" aria-label="Portal views">
+        <button id="tab-catalog" class="tab-button active" type="button" aria-selected="true" aria-controls="catalog">Asset catalog</button>
+        <button id="tab-requests" class="tab-button" type="button" aria-selected="false" aria-controls="requests-panel">My requests</button>
+        <button id="tab-approvals" class="tab-button" type="button" aria-selected="false" aria-controls="approvals-panel">Approval queue <span id="approvals-count" class="badge" hidden>0</span></button>
+      </nav>
+
+      <!-- View 1: Asset Catalog -->
+      <section id="catalog" class="panel tab-panel" aria-labelledby="catalog-title">
+        <div class="catalog-header">
+          <div>
+            <h2 id="catalog-title">Permitted assets</h2>
+            <p id="identity"></p>
+          </div>
+          <button id="refresh" class="secondary" type="button">Refresh catalog</button>
         </div>
-        <button id="refresh" class="secondary" type="button">Refresh catalog</button>
+        <ul id="assets" aria-label="Permitted assets"></ul>
+      </section>
+
+      <!-- View 2: Requester Flow - My Requests -->
+      <section id="requests-panel" class="panel tab-panel" aria-labelledby="requests-title" hidden>
+        <div class="catalog-header">
+          <div>
+            <h2 id="requests-title">My access requests</h2>
+            <p>Track request revisions, cancellations, and launch active sessions.</p>
+          </div>
+          <button id="refresh-requests" class="secondary" type="button">Refresh requests</button>
+        </div>
+        <ul id="requests-list" class="cards-list" aria-label="Access requests"></ul>
+      </section>
+
+      <!-- View 3: Approver Flow - Approval Queue -->
+      <section id="approvals-panel" class="panel tab-panel" aria-labelledby="approvals-title" hidden>
+        <div class="catalog-header">
+          <div>
+            <h2 id="approvals-title">Pending approvals</h2>
+            <p>Review exact revisions and record independent authorization decisions.</p>
+          </div>
+          <button id="refresh-approvals" class="secondary" type="button">Refresh approvals</button>
+        </div>
+        <div id="stale-alert" class="alert alert-warning" role="alert" hidden>
+          <strong>Notice:</strong> The proposal changed. Reload the current revision before accepting another decision.
+          <button id="reload-stale-btn" class="secondary small-btn" type="button">Reload current revision</button>
+        </div>
+        <ul id="approvals-list" class="cards-list" aria-label="Pending approvals"></ul>
+      </section>
+    </div>
+
+    <!-- Request Access Dialog -->
+    <dialog id="request-dialog" class="panel modal-dialog">
+      <h2 id="request-dialog-title">Request privileged access</h2>
+      <form id="request-form">
+        <input type="hidden" id="req-asset-id" name="asset_id">
+        <input type="hidden" id="req-account-id" name="target_account_id">
+        <div>
+          <label>Target asset</label>
+          <div id="req-asset-name" class="readonly-value"></div>
+        </div>
+        <div>
+          <label>Target account</label>
+          <div id="req-account-name" class="readonly-value"></div>
+        </div>
+        <div>
+          <label for="req-start">Requested start (UTC)</label>
+          <input id="req-start" name="requested_start_at" type="datetime-local" required>
+        </div>
+        <div>
+          <label for="req-end">Requested end (UTC)</label>
+          <input id="req-end" name="requested_end_at" type="datetime-local" required>
+        </div>
+        <div>
+          <label for="req-justification">Justification</label>
+          <textarea id="req-justification" name="justification" rows="3" required maxlength="1000" placeholder="State operational reason and work scope"></textarea>
+        </div>
+        <div>
+          <label for="req-ticket">Ticket reference <span id="ticket-req-label" class="optional-text">(optional)</span></label>
+          <input id="req-ticket" name="ticket_ref" maxlength="64" placeholder="e.g. SEC-1234">
+        </div>
+        <div class="dialog-actions">
+          <button id="req-submit-btn" type="submit">Submit request</button>
+          <button id="req-cancel-btn" class="secondary" type="button">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Revise Request Dialog -->
+    <dialog id="revise-dialog" class="panel modal-dialog">
+      <h2>Replace request revision</h2>
+      <p class="dialog-desc">Replacing a pending revision cancels prior steps and restarts approval routing.</p>
+      <form id="revise-form">
+        <input type="hidden" id="revise-request-id" name="request_id">
+        <input type="hidden" id="revise-expected-id" name="expected_revision_id">
+        <div>
+          <label for="revise-start">Requested start (UTC)</label>
+          <input id="revise-start" name="requested_start_at" type="datetime-local" required>
+        </div>
+        <div>
+          <label for="revise-end">Requested end (UTC)</label>
+          <input id="revise-end" name="requested_end_at" type="datetime-local" required>
+        </div>
+        <div>
+          <label for="revise-justification">Updated justification</label>
+          <textarea id="revise-justification" name="justification" rows="3" required maxlength="1000"></textarea>
+        </div>
+        <div>
+          <label for="revise-ticket">Ticket reference</label>
+          <input id="revise-ticket" name="ticket_ref" maxlength="64">
+        </div>
+        <div class="dialog-actions">
+          <button id="revise-submit-btn" type="submit">Submit replacement revision</button>
+          <button id="revise-cancel-btn" class="secondary" type="button">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Launch Session Dialog -->
+    <dialog id="launch-dialog" class="panel modal-dialog">
+      <h2>Session launch authorization</h2>
+      <p>Single-use launch capability issued. Use before expiration:</p>
+      <div class="launch-details">
+        <label>SSH Connection Command:</label>
+        <pre><code id="launch-command">ssh -p 2222 &lt;token&gt;@gateway.lab</code></pre>
+        <p id="launch-expiry" class="expiry-note"></p>
       </div>
-      <ul id="assets" aria-label="Permitted assets"></ul>
-    </section>
+      <div class="dialog-actions">
+        <button id="launch-close-btn" class="secondary" type="button">Close</button>
+      </div>
+    </dialog>
   </main>
 </body>
 </html>

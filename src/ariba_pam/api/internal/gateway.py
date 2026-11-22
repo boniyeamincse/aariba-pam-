@@ -190,10 +190,15 @@ def record_gateway_event(
         raise NotFoundException("Session not found", code="SESSION_NOT_FOUND")
 
     event_state = payload.get("state")
-    if event_state == "ended":
-        session.status = "ended"
-        session.ended_at = utc_now()
-        session.termination_reason = payload.get("reason", "Gateway closed session")
+    if session.status not in ("ended", "failed"):
+        if event_state == "ended":
+            session.status = "ended"
+            session.ended_at = utc_now()
+            session.termination_reason = payload.get("reason", "Gateway closed session")
+        elif event_state == "failed":
+            session.status = "failed"
+            session.ended_at = utc_now()
+            session.termination_reason = payload.get("reason", "Gateway session failure")
 
     AuditService.record_event(
         db=db,

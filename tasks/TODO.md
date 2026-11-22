@@ -28,11 +28,7 @@ Phase 1 tasks and their implementation evidence are listed in [COMPLETED.md](COM
 
 Use the [access workflow](../docs/08-USER-WORKFLOW.md), [API contracts](../docs/11-API-SPECIFICATION.md), and [interaction guidelines](../docs/12-UI-UX-GUIDELINES.md).
 
-| ID | Task | Depends on | Check or reference | Completion check |
-| --- | --- | --- | --- | --- |
-| P2-08 | Build requester and approver portal flows | P2-03, P2-05, P2-06 | FR-03, FR-04, T-02 | A user can submit and track a request. An approver can review the exact revision and see stale-decision feedback |
-
-Completed Phase 2 tasks (P2-01, P2-02, P2-03, P2-04, P2-05, P2-06, P2-07, P2-09) with verification evidence have been moved to [COMPLETED.md](COMPLETED.md).
+All Phase 2 tasks (P2-01 through P2-09) and their implementation evidence have been completed and recorded in [COMPLETED.md](COMPLETED.md).
 
 ## Phase 3 · SSH gateway in the lab
 
@@ -40,15 +36,11 @@ Use the [SSH gateway specification](../specifications/modules/ssh-gateway.md). A
 
 | ID | Task | Depends on | Check or reference | Completion check |
 | --- | --- | --- | --- | --- |
-| P3-01 | Start a gateway process with a zone-bound service identity | P2-09 | FR-06, T-03 | The control plane accepts the enrolled gateway only for its assigned zone |
 | P3-02 | Issue a short-lived one-time launch authorization | P3-01 | FR-05, T-04 | Current policy, grant ownership, gateway mapping, and time window are checked. Launch secrets stay out of URLs and logs |
 | P3-03 | Atomically consume a launch and reserve a starting session | P3-02 | FR-05, T-04 | Concurrent consumption produces at most one starting session. Expired, revoked, and mismatched launches are denied |
-| P3-04 | Connect to an approved lab host over interactive SSH | P3-03 | FR-06, NFR-06, T-03 | Verify host identity before target authentication. Deny untrusted targets, direct routine SSH, and unapproved channels |
-| P3-05 | Apply gateway leases and local expiry | P3-04 | FR-07, NFR-02, T-05 | A partition cannot extend an active lease. The earlier of lease and grant expiry closes both directions |
-| P3-06 | Revoke grants and terminate scoped sessions | P3-05 | FR-07, NFR-01, T-05 | Revoke stops new launches and closes linked sessions. A session-only action affects only its selected session |
-| P3-07 | Propagate IdP disablement to grants and active sessions | P3-06 | FR-01, FR-07, NFR-01, T-01 | Disablement invalidates access. Repeated or stale events cannot reopen it. Record end-to-end timing |
-| P3-08 | Reconcile gateway status and show termination progress | P3-06 | FR-07, FR-08, T-05 | The portal shows pending termination until gateway evidence arrives. Late events cannot reopen ended sessions |
 | P3-09 | Verify the gateway lab milestone | P3-07, P3-08 | Phase 3 exit | Record evidence for allowed SSH, denied paths, launch replay, expiry, revocation, and partition tests |
+
+Completed Phase 3 tasks (P3-01, P3-04, P3-05, P3-06, P3-07, P3-08) with verification evidence have been moved to [COMPLETED.md](COMPLETED.md).
 
 ## Phase 4 · Credential custody
 

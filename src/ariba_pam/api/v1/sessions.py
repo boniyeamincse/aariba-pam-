@@ -55,6 +55,46 @@ def list_sessions(
     return results
 
 
+@router.get("/{session_id}", response_model=Dict[str, Any])
+def get_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """View session state within caller scope."""
+    session = (
+        db.query(AccessSession)
+        .options(
+            joinedload(AccessSession.grant).joinedload(AccessGrant.asset),
+            joinedload(AccessSession.grant).joinedload(AccessGrant.target_account),
+        )
+        .filter(AccessSession.id == session_id)
+        .first()
+    )
+    if not session:
+        raise NotFoundException("Session not found", code="SESSION_NOT_FOUND")
+
+    user_roles = ScopeChecker.get_user_roles(current_user)
+    is_owner = session.grant.requester_id == current_user.id
+    is_operator = "operator" in user_roles or "admin" in user_roles
+
+    if not is_owner and not (is_operator and ScopeChecker.is_asset_in_scope(current_user, session.grant.asset, "operator")):
+        # Conceal out-of-scope session with 404
+        raise NotFoundException("Session not found", code="SESSION_NOT_FOUND")
+
+    return {
+        "session_id": session.id,
+        "grant_id": session.grant_id,
+        "asset_name": session.grant.asset.name,
+        "target_account": session.grant.target_account.username,
+        "gateway_id": session.gateway_id,
+        "status": session.status,
+        "started_at": session.started_at.isoformat(),
+        "ended_at": session.ended_at.isoformat() if session.ended_at else None,
+        "termination_reason": session.termination_reason,
+    }
+
+
 @router.post("/{session_id}/terminate", response_model=Dict[str, Any], status_code=202)
 def terminate_session(
     session_id: str,
