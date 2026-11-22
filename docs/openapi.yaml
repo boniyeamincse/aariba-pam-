@@ -428,9 +428,11 @@ paths:
     patch:
       tags: [Identity]
       operationId: updateUser
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      headers:
-        If-Match:
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - name: If-Match
+          in: header
+          required: false
           schema: {type: string}
       requestBody:
         required: true
@@ -481,7 +483,7 @@ paths:
       tags: [Identity]
       operationId: getUserAccess
       responses:
-        '200': {description: Effective roles, scopes, grants, and sessions}
+        '200': {description: 'Effective roles, scopes, grants, and sessions'}
 
   /users/{user_id}/sessions:
     get:
