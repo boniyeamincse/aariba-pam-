@@ -12,7 +12,7 @@ This file is the single source of truth for repository progress, session handove
 - **Current Milestone**: Phases 1 through 8 100% Complete! (`P8-03: Test recovery at the approved expanded capacity` Complete · All Planned Roadmap Milestones Delivered)
 - **Control Plane Test Health**: `159 passed, 2 skipped` (`DEBUG=false pytest -v`)
 - **Gateway Test Health**: `17 passed` (`cd gateway && go test -v ./...`)
-- **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
+- **Web Console Build Health**: `11/11 routes compiled successfully` (`cd web && npm run build`)
 - **Database Migration State**: Alembic head (`0008_rdp_support.py`)
 - **Security Invariants**: Default Deny, Fail-Closed Capture, HTTP 404 identifier concealment, Custodian boundary isolation, Separation of Duties (SoD), Multi-Custodian Quorum, Transactional Audit Outbox, Bidirectional Schema Migration Reversibility, Disaster Recovery RTO $\le$ 15m / RPO $\le$ 1m.
 
@@ -33,7 +33,33 @@ Every AI agent must follow the rules defined in these configuration files:
 
 ## 3. Work Log & Session History
 
-### Session 25: Disaster Recovery Rehearsal, Split-Key Custody & Evidence Retrieval at Expanded Capacity (`P8-03`) (Current)
+### Session 26: Full API Spec Sync (72 Endpoints), OpenAPI 3.1 Dump, Enterprise Operations Dashboard & Roadmap Realignment (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Canonical API Specification (`docs/04-API-SPECIFICATION.md`)**:
+     - Expanded specification to include Sections 12 through 18 covering all endpoints added across Phases 5 through 8:
+       - Section 12: Evidence & WORM Storage Management (`/api/v1/audit/...`, `/api/v1/recordings/...`).
+       - Section 13: SOC Alerting, Circuit Breaker & Health Monitoring (`/api/v1/alerts/...`).
+       - Section 14: Emergency Break-Glass Out-of-Band Access (`/api/v1/emergency/...`).
+       - Section 15: Vault Credential & RDP Gateway Internal Protocol (`/internal/v1/sessions/...`).
+       - Section 16: Security SIEM & SOC Event Adapters (`/api/v1/admin/wazuh/...`, `/api/v1/admin/soc/...`).
+       - Section 17: Multi-IdP Federation & SCIM 2.0 Ingestion (`/api/v1/admin/idp/...`, `/api/v1/auth/scim/v2/...`).
+       - Section 18: High Availability, Rolling Upgrades & Disaster Recovery (`/api/v1/admin/ha/...`, `/api/v1/admin/upgrade/...`, `/api/v1/admin/recovery/...`).
+  2. **Canonical OpenAPI 3.1 Contract Export (`docs/openapi.yaml`)**:
+     - Dumped complete, spec-compliant OpenAPI 3.1 YAML covering all 72 API paths directly generated from FastAPI `app.openapi()`.
+  3. **Enterprise Development Roadmap (`docs/18-DEVELOPMENT-ROADMAP.md`)**:
+     - Realigned roadmap lifecycle diagram and phase descriptions to mark Phases 0 through 8 as `[COMPLETED]`.
+     - Added Day-2 Enterprise Operations & Continuous Assurance backlog (automated ledger audit, behavioral keystroke dynamics anomaly detection, multi-cloud HSM integration).
+  4. **Enterprise Web Console Operations Dashboard (`web/app/operations/page.tsx`)**:
+     - Implemented full Operations dashboard presenting multi-node Control Plane health (`cp-node-01`, `cp-node-02`, `cp-node-03`), zone-redundant SSH gateways (`gw-zone-east-01`, `gw-zone-west-01`), Expand/Contract schema evolution status, expanded capacity DR baseline, and live interactive recovery drill simulator.
+     - Added `Operations` navigation tab to `web/app/layout.tsx`.
+     - Verified clean production build: **11/11 static routes compiled successfully**.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **159 passed, 2 skipped** (in 7.37s).
+  - `cd gateway && go test -v ./...`: **17 passed** (in 4.45s).
+  - `cd web && npm run build`: **11/11 static routes compiled successfully**.
+
+### Session 25: Disaster Recovery Rehearsal, Split-Key Custody & Evidence Retrieval at Expanded Capacity (`P8-03`)
 - **Date**: 2026-11-22
 - **Completed Work**:
   1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:

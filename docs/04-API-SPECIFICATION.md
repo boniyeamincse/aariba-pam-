@@ -149,8 +149,89 @@ When a user attempts to access an asset, request, session, or evidence item outs
 
 | Method | Path | Purpose | Success |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/v1/audit-events` | Query audit trail with cursor pagination within caller scope. | 200 OK |
+| `GET` | `/api/v1/audit/events` | Query audit outbox events with cursor pagination within caller scope. | 200 OK |
+| `POST` | `/api/v1/audit/export` | Authorize and initiate an immutable, signed audit trail export. | 202 Accepted |
+| `GET` | `/api/v1/audit/exports/{export_id}/download` | Download verifiable audit export payload with SHA-256 custody digest. | 200 OK |
 | `GET` | `/api/v1/recordings/{recording_id}` | View scoped recording metadata, file size, and coverage status. | 200 OK |
 | `POST` | `/api/v1/recordings/{recording_id}/playback-sessions` | Authorize short-lived playback streaming URL for scoped auditor. | 201 Created |
 | `POST` | `/api/v1/recordings/{recording_id}/exports` | Initiate an auditable, scoped evidence export job. | 202 Accepted |
-| `GET` | `/api/v1/recording-exports/{export_id}` | Check export status and retrieve expiring download reference. | 200 OK |
+| `GET` | `/api/v1/recordings/exports/{export_id}/download` | Retrieve authorized recording export archive. | 200 OK |
+
+---
+
+## 12. SOC Alerting, Circuit Breaker & Monitoring APIs
+
+| Method | Path | Purpose | Success |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/alerts/events` | List SOC security alerts (recording degradation, lease failures, launch blocks). | 200 OK |
+| `POST` | `/api/v1/alerts/events/{alert_id}/acknowledge` | Acknowledge SOC alert with analyst identity and triage notes. | 200 OK |
+| `GET` | `/api/v1/alerts/circuit-breaker` | Inspect outbound SOC adapter and SIEM webhook circuit breaker state. | 200 OK |
+| `POST` | `/api/v1/alerts/circuit-breaker/reset` | Manually reset tripped circuit breaker after upstream recovery. | 200 OK |
+
+---
+
+## 13. Emergency Out-of-Band Break-Glass APIs
+
+| Method | Path | Purpose | Success |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/emergency/requests` | Initiate high-urgency emergency access request bypassing standard queue. | 201 Created |
+| `POST` | `/api/v1/emergency/requests/{request_id}/approve` | Multi-custodian or secondary authority emergency approval. | 200 OK |
+| `POST` | `/api/v1/emergency/requests/{request_id}/launches` | Issue high-priority emergency session launch capability. | 201 Created |
+| `GET` | `/api/v1/emergency/active` | Real-time monitoring of all active emergency break-glass sessions. | 200 OK |
+
+---
+
+## 14. Vault Credential & RDP Gateway Internal APIs
+
+| Method | Path | Purpose | Success |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/internal/v1/sessions/{session_id}/vault-credentials` | Ephemeral retrieval of injected vault password for authenticated gateway. | 200 OK |
+| `GET` | `/internal/v1/sessions/{session_id}/rdp-parameters` | Compile Windows RDP tunnel parameters and gateway proxy certificates. | 200 OK |
+| `POST` | `/internal/v1/sessions/{session_id}/vault-credentials/rotate`| Trigger post-session automated credential rotation in Vault. | 200 OK |
+| `POST` | `/internal/v1/sessions/{session_id}/sign-certificate` | Gateway requests short-lived Ed25519 OpenSSH user certificate from CA. | 201 Created |
+
+---
+
+## 15. Security SIEM & SOC Event Adapters
+
+| Method | Path | Purpose | Success |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/wazuh/status` | Wazuh SIEM adapter status, transmission queue, and dead-letter count. | 200 OK |
+| `POST` | `/api/v1/admin/wazuh/test-event` | Send synthetic test event through Wazuh OSSEC transformer. | 200 OK |
+| `GET` | `/api/v1/admin/soc/status` | Enterprise SOC streaming status, active priority channels, and metrics. | 200 OK |
+| `POST` | `/api/v1/admin/soc/test-event` | Emit synthetic priority alert through SOC adapter. | 200 OK |
+| `POST` | `/api/v1/admin/soc/circuit-breaker/reset` | Force reset SOC delivery circuit breaker. | 200 OK |
+
+---
+
+## 16. Multi-IdP Federation & SCIM 2.0 Ingestion
+
+| Method | Path | Purpose | Success |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/idp/status` | Multi-IdP federation configuration, health, and disablement sync status. | 200 OK |
+| `POST` | `/api/v1/auth/idp/secondary/events` | Ingest Webhook events from secondary federated IdP with signature check. | 200 OK |
+| `PATCH` | `/api/v1/auth/scim/v2/Users/{user_id}` | SCIM 2.0 deprovisioning endpoint (`active: false`) with instant session purge. | 200 OK |
+
+---
+
+## 17. High Availability & Rolling Upgrade APIs
+
+| Method | Path | Purpose | Success |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/ha/status` | Multi-node Control Plane cluster topology, node health, and zone gateways. | 200 OK |
+| `POST` | `/api/v1/admin/ha/gateways/heartbeat` | Gateway zone instance heartbeat and active connection count update. | 200 OK |
+| `POST` | `/api/v1/admin/ha/simulate-failover` | Administrative simulation of primary node failure and switchover verification. | 200 OK |
+| `GET` | `/api/v1/admin/upgrade/status` | Current cluster software versions, Expand/Contract schema state, and node drain status. | 200 OK |
+| `POST` | `/api/v1/admin/upgrade/simulate-roll` | Administrative simulation of rolling upgrade across nodes with 0% session loss. | 200 OK |
+| `POST` | `/api/v1/admin/upgrade/simulate-rollback` | Administrative simulation of emergency rollback under concurrent active session load. | 200 OK |
+
+---
+
+## 18. Disaster Recovery & Expanded Capacity APIs
+
+| Method | Path | Purpose | Success |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/recovery/expanded-status` | Database capacity profile, entity counts vs targets, and last DR rehearsal results. | 200 OK |
+| `POST` | `/api/v1/admin/recovery/simulate-expanded-drill` | Execute full disaster recovery benchmark drill (restore, key recovery, evidence search). | 200 OK |
+| `GET` | `/api/v1/admin/itsm/status` | ITSM service desk integration status, cache statistics, and ticket verification SLA. | 200 OK |
+

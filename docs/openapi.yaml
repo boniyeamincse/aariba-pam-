@@ -1,2032 +1,4139 @@
 openapi: 3.1.0
 info:
-  title: Ariba PAM API
-  version: 1.1.0
-  description: |
-    Ariba PAM privileged access management API v1.1.
-    Browser APIs require an authenticated session and CSRF protection.
-    Internal APIs require mutually authenticated service identities.
-  license:
-    name: Proprietary
-servers:
-  - url: /api/v1
-    description: Public portal API
-  - url: /
-    description: Internal service API
-security:
-  - BrowserSession: []
-
-tags:
-  - name: Identity
-  - name: RBAC
-  - name: Assets
-  - name: Accounts
-  - name: Vault
-  - name: Requests
-  - name: Approvals
-  - name: Grants
-  - name: Sessions
-  - name: Emergency
-  - name: Rotation
-  - name: Discovery
-  - name: Integrations
-  - name: Notifications
-  - name: Reports
-  - name: Audit
-  - name: Health
-  - name: Administration
-  - name: Internal Gateway
-
-components:
-  securitySchemes:
-    BrowserSession:
-      type: apiKey
-      in: cookie
-      name: pam_session
-    GatewayIdentity:
-      type: mutualTLS
-
-  parameters:
-    XRequestId:
-      name: X-Request-ID
-      in: header
-      required: false
-      schema:
-        type: string
-        minLength: 8
-        maxLength: 128
-        pattern: '^[A-Za-z0-9._-]+$'
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: false
-      description: Required for non-idempotent state-changing operations.
-      schema:
-        type: string
-        minLength: 16
-        maxLength: 128
-        pattern: '^[A-Za-z0-9._-]+$'
-    Cursor:
-      name: cursor
-      in: query
-      schema:
-        type: string
-        maxLength: 4096
-    Limit:
-      name: limit
-      in: query
-      schema:
-        type: integer
-        minimum: 1
-        maximum: 100
-        default: 20
-
-  headers:
-    ETag:
-      description: Resource version for optimistic concurrency.
-      schema:
-        type: string
-    RetryAfter:
-      description: Seconds before retrying.
-      schema:
-        type: integer
-        minimum: 1
-
-  responses:
-    Unauthorized:
-      description: Authentication required.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Forbidden:
-      description: Authenticated caller lacks role or resource scope.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    NotFound:
-      description: Missing or concealed resource.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Conflict:
-      description: Invalid state, stale resource version, or idempotency conflict.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Validation:
-      description: Request validation failed.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    ServiceUnavailable:
-      description: Required authorization or evidence service unavailable.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-
-  schemas:
-    Error:
-      type: object
-      additionalProperties: false
-      required: [code, message, request_id]
-      properties:
-        code:
-          type: string
-          examples: [UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, STALE_RESOURCE_VERSION, IDENTITY_KEY_REUSE]
-        message:
-          type: string
-          maxLength: 500
-        request_id:
-          type: string
-        details:
-          type: array
-          items:
-            type: object
-
-    CursorPage:
-      type: object
-      additionalProperties: false
-      required: [items]
-      properties:
-        items:
-          type: array
-          items: {}
-        next_cursor:
-          type: string
-          nullable: true
-
-    Timestamp:
-      type: string
-      format: date-time
-
-    User:
-      type: object
-      additionalProperties: false
-      required: [id, subject, display_name, status]
-      properties:
-        id: {type: string, example: user_demo}
-        subject: {type: string, example: catalog-demo}
-        display_name: {type: string, example: Demo Privileged User}
-        email: {type: string, format: email, example: catalog-demo@example.test}
-        status: {type: string, enum: [active, suspended, disabled, locked]}
-        version: {type: integer, minimum: 0}
-        created_at: {$ref: '#/components/schemas/Timestamp'}
-        updated_at: {$ref: '#/components/schemas/Timestamp'}
-
-    Asset:
-      type: object
-      additionalProperties: false
-      required: [id, name, type, status]
-      properties:
-        id: {type: string, example: asset_demo}
-        name: {type: string, minLength: 1, maxLength: 200}
-        type:
-          type: string
-          enum: [linux_server, windows_server, network_device, firewall, database_server, cloud_infrastructure, virtualization_platform, kubernetes_infrastructure]
-        address: {type: string, maxLength: 500}
-        zone: {type: string, example: lab-zone-a}
-        status: {type: string, enum: [active, disabled, unreachable]}
-        version: {type: integer, minimum: 0}
-
-    PrivilegedAccount:
-      type: object
-      additionalProperties: false
-      required: [id, asset_id, name, category, status]
-      properties:
-        id: {type: string, example: account_demo}
-        asset_id: {type: string, example: asset_demo}
-        name: {type: string, maxLength: 200}
-        category:
-          type: string
-          enum: [root, administrator, service_account, database_administrator, network_administrator, privileged_account]
-        vault_secret_id: {type: string, nullable: true}
-        status: {type: string, enum: [active, disabled, verification_failed]}
-        version: {type: integer, minimum: 0}
-
-    AccessRequest:
-      type: object
-      additionalProperties: false
-      required: [id, revision_id, asset_id, target_account_id, requested_start_at, requested_end_at, justification, state]
-      properties:
-        id: {type: string, example: req_demo}
-        revision_id: {type: string, example: rev_demo}
-        asset_id: {type: string, example: asset_demo}
-        target_account_id: {type: string, example: account_demo}
-        requested_start_at: {$ref: '#/components/schemas/Timestamp'}
-        requested_end_at: {$ref: '#/components/schemas/Timestamp'}
-        justification: {type: string, minLength: 10, maxLength: 2000}
-        ticket_ref: {type: string, maxLength: 200, nullable: true}
-        state: {type: string, enum: [pending, approved, rejected, cancelled, expired]}
-        policy_version_id: {type: string}
-
-    Grant:
-      type: object
-      additionalProperties: false
-      required: [id, subject, target_asset_id, target_account_id, effective_start_at, effective_end_at, status]
-      properties:
-        id: {type: string, example: grant_demo}
-        subject: {type: string, example: user_demo}
-        target_asset_id: {type: string, example: asset_demo}
-        target_account_id: {type: string, example: account_demo}
-        effective_start_at: {$ref: '#/components/schemas/Timestamp'}
-        effective_end_at: {$ref: '#/components/schemas/Timestamp'}
-        status: {type: string, enum: [active, expired, revoked]}
-
-    Session:
-      type: object
-      additionalProperties: false
-      required: [id, grant_id, gateway_id, status]
-      properties:
-        id: {type: string, example: session_demo}
-        grant_id: {type: string, example: grant_demo}
-        gateway_id: {type: string, example: gateway_demo}
-        status: {type: string, enum: [requested, active, paused, terminated, ended, expired]}
-        reason_code: {type: string, nullable: true}
-        started_at: {$ref: '#/components/schemas/Timestamp'}
-        ended_at: {$ref: '#/components/schemas/Timestamp'}
-
-    Role:
-      type: object
-      additionalProperties: false
-      required: [id, name, permissions]
-      properties:
-        id: {type: string}
-        name: {type: string}
-        description: {type: string}
-        permissions:
-          type: array
-          items: {type: string}
-        scope_ids:
-          type: array
-          items: {type: string}
-        version: {type: integer, minimum: 0}
-
+  title: Ariba PAM Control Plane
+  description: Ariba PAM - Privileged Access Management Control Plane
+  version: 0.1.0
 paths:
-  /me:
+  /health:
     get:
-      tags: [Identity]
-      operationId: getCurrentPrincipal
-      description: Requires authenticated browser session. Returns permitted scope summaries.
+      tags:
+      - Health & Operability
+      summary: Health Check
+      description: Liveness probe confirming service process is up.
+      operationId: health_check_health_get
       responses:
-        '200': {description: Current principal, content: {application/json: {schema: {$ref: '#/components/schemas/User'}}}}
-        '401': {$ref: '#/components/responses/Unauthorized'}
-
-  /auth/methods:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /ready:
     get:
-      tags: [Identity]
-      operationId: listAuthMethods
+      tags:
+      - Health & Operability
+      summary: Readiness Check
+      description: Readiness probe verifying operational database connectivity.
+      operationId: readiness_check_ready_get
       responses:
-        '200': {description: Enabled authentication methods, content: {application/json: {schema: {type: object, properties: {methods: {type: array, items: {type: string, enum: [totp, webauthn, oidc, saml, ldap]}}}}}}}
-
-  /auth/mfa/enroll:
-    post:
-      tags: [Identity]
-      operationId: enrollMfa
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/XRequestId'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [method]
-              properties:
-                method: {type: string, enum: [totp, webauthn]}
-      responses:
-        '201': {description: Enrollment started}
-
-  /auth/mfa/verify:
-    post:
-      tags: [Identity]
-      operationId: verifyMfa
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [challenge_id, code]
-              properties:
-                challenge_id: {type: string}
-                code: {type: string, minLength: 6, maxLength: 12}
-      responses:
-        '200': {description: MFA verified}
-
-  /auth/mfa/disable:
-    post:
-      tags: [Identity]
-      operationId: disableMfa
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [step_up_token]
-              properties:
-                step_up_token: {type: string}
-      responses:
-        '200': {description: MFA disabled}
-
-  /auth/mfa/recovery-codes:
-    post:
-      tags: [Identity]
-      operationId: generateRecoveryCodes
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [step_up_token]
-              properties:
-                step_up_token: {type: string}
-      responses:
-        '201': {description: Recovery codes generated}
-
-  /auth/step-up:
-    post:
-      tags: [Identity]
-      operationId: startStepUp
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [purpose]
-              properties:
-                purpose: {type: string, enum: [credential_access, policy_change, emergency_access, session_termination, audit_export, role_assignment]}
-      responses:
-        '200': {description: Step-up challenge issued}
-
-  /auth/devices:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /health/components:
     get:
-      tags: [Identity]
-      operationId: listTrustedDevices
+      tags:
+      - Health & Operability
+      summary: Component Health Check
+      description: Deep component health probe for NFR-08 (99.95% availability & health
+        probes).
+      operationId: component_health_check_health_components_get
       responses:
-        '200': {description: Trusted devices, content: {application/json: {schema: {$ref: '#/components/schemas/CursorPage'}}}}
-
-  /auth/devices/{device_id}:
-    parameters:
-      - name: device_id
-        in: path
-        required: true
-        schema: {type: string}
-    delete:
-      tags: [Identity]
-      operationId: revokeTrustedDevice
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '200': {description: Device revoked}
-
-  /users:
-    get:
-      tags: [Identity]
-      operationId: listUsers
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Users, content: {application/json: {schema: {$ref: '#/components/schemas/CursorPage'}}}}
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/auth/login:
     post:
-      tags: [Identity]
-      operationId: createUser
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [subject, display_name]
-              properties:
-                subject: {type: string, minLength: 1, maxLength: 255}
-                display_name: {type: string, minLength: 1, maxLength: 200}
-                email: {type: string, format: email}
-      responses:
-        '201': {description: User created, content: {application/json: {schema: {$ref: '#/components/schemas/User'}}}}
-
-  /users/{user_id}:
-    parameters:
-      - name: user_id
-        in: path
-        required: true
-        schema: {type: string}
-    get:
-      tags: [Identity]
-      operationId: getUser
-      responses:
-        '200': {description: User, content: {application/json: {schema: {$ref: '#/components/schemas/User'}}}}
-    patch:
-      tags: [Identity]
-      operationId: updateUser
+      tags:
+      - Authentication & Identity
+      summary: Synthetic Login
+      description: Synthetic IdP login endpoint for the lab environment.
+      operationId: synthetic_login_api_v1_auth_login_post
       parameters:
-        - {$ref: '#/components/parameters/IdempotencyKey'}
-        - name: If-Match
-          in: header
-          required: false
-          schema: {type: string}
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_synthetic_login
+          title: X-Correlation-Id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                display_name: {type: string, minLength: 1, maxLength: 200}
-                email: {type: string, format: email}
-                status: {type: string, enum: [active, suspended, locked]}
+              $ref: '#/components/schemas/SyntheticLoginInput'
       responses:
-        '200': {description: User updated, content: {application/json: {schema: {$ref: '#/components/schemas/User'}}}}
-
-  /users/{user_id}/activate:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Synthetic Login Api V1 Auth Login Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/me:
+    get:
+      tags:
+      - Authentication & Identity
+      summary: Get Me
+      description: GET /api/v1/me - Returns caller principal, active roles, and resource
+        scopes.
+      operationId: get_me_api_v1_me_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/idp-events:
     post:
-      tags: [Identity]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody: {required: true, content: {application/json: {schema: {type: object, properties: {reason: {type: string, maxLength: 2000}}}}}}
-      responses:
-        '200': {description: User activated}
+      tags:
+      - Authentication & Identity
+      summary: Idp Lifecycle Event
+      description: 'Ingest IdP lifecycle events (e.g. user.disabled, user.deprovisioned).
 
-  /users/{user_id}/suspend:
-    post:
-      tags: [Identity]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+        Deduplicates events, invalidates identity, immediately revokes active grants,
+
+        and terminates associated sessions within the 60s NFR-01 propagation window.'
+      operationId: idp_lifecycle_event_api_v1_auth_idp_events_post
+      parameters:
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_idp_event
+          title: X-Correlation-Id
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [reason]
-              properties:
-                reason: {type: string, minLength: 10, maxLength: 2000}
+              $ref: '#/components/schemas/IdPLifecycleEventInput'
       responses:
-        '202': {description: Suspension and session revocation accepted}
-
-  /users/{user_id}/unlock:
-    post:
-      tags: [Identity]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '200': {description: Account unlocked}
-
-  /users/{user_id}/access:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Idp Lifecycle Event Api V1 Auth Idp Events Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/assets:
     get:
-      tags: [Identity]
-      operationId: getUserAccess
-      responses:
-        '200': {description: 'Effective roles, scopes, grants, and sessions'}
+      tags:
+      - Asset & Target Inventory
+      summary: List Assets
+      description: 'List permitted assets and their active target accounts.
 
-  /users/{user_id}/sessions:
+        Default deny: only assets matching the user''s role assignments are returned.'
+      operationId: list_assets_api_v1_assets_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetResponse'
+                title: Response List Assets Api V1 Assets Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/assets/{asset_id}:
     get:
-      tags: [Identity]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Active sessions, content: {application/json: {schema: {$ref: '#/components/schemas/CursorPage'}}}}
+      tags:
+      - Asset & Target Inventory
+      summary: Get Asset
+      description: 'Retrieve single asset details if within caller''s scope.
 
-  /admin/roles:
-    get:
-      tags: [RBAC]
-      operationId: listRoles
-      responses:
-        '200': {description: Roles, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Role'}}}}}
-    post:
-      tags: [RBAC]
-      operationId: createRole
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name, permissions]
-              properties:
-                name: {type: string, minLength: 1, maxLength: 100}
-                permissions: {type: array, items: {type: string}}
-                scope_ids: {type: array, items: {type: string}}
-      responses:
-        '201': {description: Role created, content: {application/json: {schema: {$ref: '#/components/schemas/Role'}}}}
-
-  /admin/roles/{role_id}:
-    parameters:
-      - name: role_id
-        in: path
-        required: true
-        schema: {type: string}
-    patch:
-      tags: [RBAC]
-      operationId: updateRole
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name: {type: string}
-                permissions: {type: array, items: {type: string}}
-                scope_ids: {type: array, items: {type: string}}
-                expected_version: {type: integer, minimum: 0}
-      responses:
-        '200': {description: Role updated}
-
-  /admin/permissions:
-    get:
-      tags: [RBAC]
-      operationId: listPermissions
-      responses:
-        '200': {description: Available permission IDs}
-
-  /admin/roles/{role_id}/permissions:
-    put:
-      tags: [RBAC]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [permission_ids]
-              properties:
-                permission_ids: {type: array, uniqueItems: true, items: {type: string}}
-      responses:
-        '200': {description: Permissions assigned}
-
-  /admin/users/{user_id}/roles:
-    get:
-      tags: [RBAC]
-      responses:
-        '200': {description: Assigned roles and effective scopes}
-    put:
-      tags: [RBAC]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [role_ids]
-              properties:
-                role_ids: {type: array, uniqueItems: true, items: {type: string}}
-      responses:
-        '200': {description: Roles assigned}
-
-  /admin/users/{user_id}/roles/{role_id}:
-    delete:
-      tags: [RBAC]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '200': {description: Role removed}
-
-  /assets:
-    get:
-      tags: [Assets]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Visible assets}
-    post:
-      tags: [Assets]
-      operationId: registerAsset
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name, type]
-              properties:
-                name: {type: string, minLength: 1, maxLength: 200}
-                type: {type: string, enum: [linux_server, windows_server, network_device, firewall, database_server, cloud_infrastructure, virtualization_platform, kubernetes_infrastructure]}
-                address: {type: string, maxLength: 500}
-                zone: {type: string, maxLength: 100}
-      responses:
-        '201': {description: Asset registered, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}
-
-  /assets/{asset_id}:
-    parameters:
+        Guessed or out-of-scope identifiers return 404 to conceal restricted assets.'
+      operationId: get_asset_api_v1_assets__asset_id__get
+      parameters:
       - name: asset_id
         in: path
         required: true
-        schema: {type: string}
-    get:
-      tags: [Assets]
-      responses:
-        '200': {description: Asset details, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}
-    patch:
-      tags: [Assets]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name: {type: string, minLength: 1, maxLength: 200}
-                address: {type: string, maxLength: 500}
-                zone: {type: string, maxLength: 100}
-                status: {type: string, enum: [active, disabled]}
-                expected_version: {type: integer, minimum: 0}
-      responses:
-        '200': {description: Asset updated}
-
-  /assets/{asset_id}/disable:
-    post:
-      tags: [Assets]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [reason]
-              properties:
-                reason: {type: string, minLength: 10, maxLength: 2000}
-      responses:
-        '202': {description: Asset disable accepted}
-
-  /assets/{asset_id}/accounts:
-    get:
-      tags: [Assets, Accounts]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Privileged accounts}
-
-  /assets/{asset_id}/discovery:
-    post:
-      tags: [Assets, Discovery]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                source: {type: string, enum: [linux_ssh, active_directory, database, network_device, cloud, virtualization]}
-      responses:
-        '202': {description: Discovery accepted}
-
-  /assets/{asset_id}/health:
-    get:
-      tags: [Assets]
-      responses:
-        '200': {description: Non-sensitive asset connectivity health}
-
-  /accounts:
-    get:
-      tags: [Accounts]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Privileged accounts}
-    post:
-      tags: [Accounts]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [asset_id, name, category]
-              properties:
-                asset_id: {type: string}
-                name: {type: string, minLength: 1, maxLength: 200}
-                category: {type: string, enum: [root, administrator, service_account, database_administrator, network_administrator, privileged_account]}
-                vault_secret_id: {type: string, nullable: true}
-      responses:
-        '201': {description: Account registered, content: {application/json: {schema: {$ref: '#/components/schemas/PrivilegedAccount'}}}}
-
-  /accounts/{account_id}:
-    parameters:
-      - name: account_id
-        in: path
-        required: true
-        schema: {type: string}
-    get:
-      tags: [Accounts]
-      responses:
-        '200': {description: Account metadata, content: {application/json: {schema: {$ref: '#/components/schemas/PrivilegedAccount'}}}}
-    patch:
-      tags: [Accounts]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name: {type: string, maxLength: 200}
-                vault_secret_id: {type: string, nullable: true}
-                status: {type: string, enum: [active, disabled]}
-                expected_version: {type: integer, minimum: 0}
-      responses:
-        '200': {description: Account updated}
-
-  /accounts/{account_id}/disable:
-    post:
-      tags: [Accounts]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [reason]
-              properties:
-                reason: {type: string, minLength: 10, maxLength: 2000}
-      responses:
-        '202': {description: Account disable accepted}
-
-  /accounts/{account_id}/health:
-    get:
-      tags: [Accounts]
-      responses:
-        '200': {description: Account verification state}
-
-  /accounts/{account_id}/verify:
-    post:
-      tags: [Accounts, Vault]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '202': {description: Credential verification started}
-
-  /accounts/{account_id}/rotate:
-    post:
-      tags: [Accounts, Rotation]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
+        schema:
+          type: string
+          title: Asset Id
+      - name: authorization
+        in: header
         required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                policy_id: {type: string}
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '202': {description: Rotation started}
-
-  /accounts/{account_id}/rotation-history:
-    get:
-      tags: [Accounts, Rotation]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Rotation history}
-
-  /vault/secrets:
-    get:
-      tags: [Vault]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Secret metadata only}
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/requests:
     post:
-      tags: [Vault]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      tags:
+      - Access Requests
+      summary: Submit Access Request
+      description: 'Submit an access request with an immutable first revision (P2-02).
+
+        Evaluates policy against requested window and account.
+
+        Replay with same idempotency key returns the same request without repeating
+        state change.'
+      operationId: submit_access_request_api_v1_requests_post
+      parameters:
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_request_submit
+          title: X-Correlation-Id
+      - name: x-idempotency-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Idempotency-Key
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [name, type]
-              properties:
-                name: {type: string, minLength: 1, maxLength: 200}
-                type: {type: string, enum: [password, ssh_private_key, api_token, database_credential, other]}
-                plaintext:
-                  type: string
-                  format: password
-                  writeOnly: true
-                  description: Secret plaintext is accepted only at vault ingress and never returned.
+              $ref: '#/components/schemas/CreateRequestInput'
       responses:
-        '201': {description: Secret metadata created}
-
-  /vault/secrets/{secret_id}:
-    parameters:
-      - name: secret_id
-        in: path
-        required: true
-        schema: {type: string}
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Submit Access Request Api V1 Requests Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     get:
-      tags: [Vault]
+      tags:
+      - Access Requests
+      summary: List Requests
+      description: List requests visible to requester or scoped reviewer.
+      operationId: list_requests_api_v1_requests_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': {description: Secret metadata; plaintext never returned}
-    put:
-      tags: [Vault]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name: {type: string, maxLength: 200}
-                plaintext: {type: string, format: password, writeOnly: true}
-                expected_version: {type: integer, minimum: 0}
-      responses:
-        '200': {description: Secret version created}
-
-  /vault/secrets/{secret_id}/rotate:
-    post:
-      tags: [Vault, Rotation]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '202': {description: Secret rotation started}
-
-  /vault/secrets/{secret_id}/verify:
-    post:
-      tags: [Vault]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '202': {description: Secret verification started}
-
-  /vault/secrets/{secret_id}/revoke:
-    post:
-      tags: [Vault]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [reason]
-              properties:
-                reason: {type: string, minLength: 10, maxLength: 2000}
-      responses:
-        '200': {description: Secret revoked}
-
-  /vault/secrets/{secret_id}/versions:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response List Requests Api V1 Requests Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/requests/{request_id}:
     get:
-      tags: [Vault]
-      responses:
-        '200': {description: Secret version metadata}
-
-  /requests:
-    get:
-      tags: [Requests]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}, {name: state, in: query, schema: {type: string, enum: [pending, approved, rejected, cancelled, expired]}}]
-      responses:
-        '200': {description: Visible requests}
-    post:
-      tags: [Requests]
-      operationId: submitAccessRequest
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [asset_id, target_account_id, requested_start_at, requested_end_at, justification]
-              properties:
-                asset_id: {type: string}
-                target_account_id: {type: string}
-                requested_start_at: {$ref: '#/components/schemas/Timestamp'}
-                requested_end_at: {$ref: '#/components/schemas/Timestamp'}
-                justification: {type: string, minLength: 10, maxLength: 2000}
-                ticket_ref: {type: string, maxLength: 200, nullable: true}
-      responses:
-        '201': {description: Request submitted, content: {application/json: {schema: {$ref: '#/components/schemas/AccessRequest'}}}}
-
-  /requests/{request_id}:
-    parameters:
+      tags:
+      - Access Requests
+      summary: Get Request
+      description: View a scoped request, its current revision, and revision history
+        (P2-03).
+      operationId: get_request_api_v1_requests__request_id__get
+      parameters:
       - name: request_id
         in: path
         required: true
-        schema: {type: string}
-    get:
-      tags: [Requests]
-      responses:
-        '200': {description: Request details, content: {application/json: {schema: {$ref: '#/components/schemas/AccessRequest'}}}}
-
-  /requests/{request_id}/revisions:
-    post:
-      tags: [Requests]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [expected_revision_id]
-              properties:
-                expected_revision_id: {type: string}
-                requested_start_at: {$ref: '#/components/schemas/Timestamp'}
-                requested_end_at: {$ref: '#/components/schemas/Timestamp'}
-                justification: {type: string, maxLength: 2000}
-                ticket_ref: {type: string, maxLength: 200, nullable: true}
-      responses:
-        '201': {description: Revision submitted}
-
-  /requests/{request_id}/cancel:
-    post:
-      tags: [Requests]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
+        schema:
+          type: string
+          title: Request Id
+      - name: authorization
+        in: header
         required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                reason: {type: string, maxLength: 2000}
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': {description: Request cancelled}
-
-  /approvals:
-    get:
-      tags: [Approvals]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Pending approvals assigned to caller}
-
-  /approval-steps/{step_id}/decisions:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Request Api V1 Requests  Request Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/requests/{request_id}/revisions:
     post:
-      tags: [Approvals]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      tags:
+      - Access Requests
+      summary: Replace Request Revision
+      description: 'Replace a pending revision with changed fields and expected revision
+        ID (P2-03).
+
+        A stale change fails with 409 Conflict. Historical fields remain unchanged.'
+      operationId: replace_request_revision_api_v1_requests__request_id__revisions_post
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_request_revision_replace
+          title: X-Correlation-Id
+      - name: x-idempotency-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Idempotency-Key
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [expected_revision_id, decision]
-              properties:
-                expected_revision_id: {type: string}
-                decision: {type: string, enum: [approve, reject]}
-                reason: {type: string, maxLength: 2000}
+              $ref: '#/components/schemas/ReplaceRevisionInput'
       responses:
-        '201': {description: Decision recorded; final approval may issue a grant}
-
-  /grants/{grant_id}:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Replace Request Revision Api V1 Requests  Request
+                  Id  Revisions Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/requests/{request_id}/cancel:
+    post:
+      tags:
+      - Access Requests
+      summary: Cancel Request
+      description: Cancel a pending request as the requester.
+      operationId: cancel_request_api_v1_requests__request_id__cancel_post
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Request Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_request_cancel
+          title: X-Correlation-Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Cancel Request Api V1 Requests  Request Id  Cancel
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/approvals:
     get:
-      tags: [Grants]
+      tags:
+      - Approvals & Decision Control
+      summary: List Pending Approvals
+      description: List pending approval steps within the caller's scoped authority.
+      operationId: list_pending_approvals_api_v1_approvals_get
       parameters:
-        - name: grant_id
-          in: path
-          required: true
-          schema: {type: string}
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': {description: Grant details, content: {application/json: {schema: {$ref: '#/components/schemas/Grant'}}}}
-
-  /grants/{grant_id}/launches:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response List Pending Approvals Api V1 Approvals Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/approval-steps/{step_id}/decisions:
     post:
-      tags: [Grants]
-      parameters:
-        - name: grant_id
-          in: path
-          required: true
-          schema: {type: string}
-        - {$ref: '#/components/parameters/IdempotencyKey'}
-      responses:
-        '201': {description: Single-use launch created}
+      tags:
+      - Approvals & Decision Control
+      summary: Record Decision
+      description: 'Record an approval or rejection.
 
-  /grants/{grant_id}/revoke:
-    post:
-      tags: [Grants]
+        Enforces separation of duties (no self-approval), scope checks, and atomic
+        grant issuance.'
+      operationId: record_decision_api_v1_approval_steps__step_id__decisions_post
       parameters:
-        - name: grant_id
-          in: path
-          required: true
-          schema: {type: string}
-        - {$ref: '#/components/parameters/IdempotencyKey'}
+      - name: step_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Step Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_approval_decision
+          title: X-Correlation-Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [reason]
-              properties:
-                reason: {type: string, minLength: 10, maxLength: 2000}
+              $ref: '#/components/schemas/DecisionInput'
       responses:
-        '202': {description: Revocation and session termination accepted}
-
-  /sessions:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Record Decision Api V1 Approval Steps  Step Id  Decisions
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/grants/{grant_id}:
     get:
-      tags: [Sessions]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}, {name: state, in: query, schema: {type: string}}]
+      tags:
+      - Grants & Session Launch
+      summary: Get Grant
+      description: View grant details within caller's scope.
+      operationId: get_grant_api_v1_grants__grant_id__get
+      parameters:
+      - name: grant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Grant Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': {description: Visible sessions}
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Grant Api V1 Grants  Grant Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/grants/{grant_id}/launches:
+    post:
+      tags:
+      - Grants & Session Launch
+      summary: Create Session Launch
+      description: 'Create a single-use launch authorization for the grant owner.
 
-  /sessions/{session_id}:
-    parameters:
+        Launch token digest is stored; raw token is returned once to the caller.'
+      operationId: create_session_launch_api_v1_grants__grant_id__launches_post
+      parameters:
+      - name: grant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Grant Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_launch_create
+          title: X-Correlation-Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Create Session Launch Api V1 Grants  Grant Id  Launches
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/grants/{grant_id}/revoke:
+    post:
+      tags:
+      - Grants & Session Launch
+      summary: Revoke Grant
+      description: 'Commit grant revocation as a scoped security operator.
+
+        Blocks new launches and marks active sessions for termination.'
+      operationId: revoke_grant_api_v1_grants__grant_id__revoke_post
+      parameters:
+      - name: grant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Grant Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_grant_revoke
+          title: X-Correlation-Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeGrantInput'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Revoke Grant Api V1 Grants  Grant Id  Revoke Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions:
+    get:
+      tags:
+      - Session Operations
+      summary: List Sessions
+      description: List visible sessions within caller's scope.
+      operationId: list_sessions_api_v1_sessions_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response List Sessions Api V1 Sessions Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions/{session_id}:
+    get:
+      tags:
+      - Session Operations
+      summary: Get Session
+      description: View session state within caller scope.
+      operationId: get_session_api_v1_sessions__session_id__get
+      parameters:
       - name: session_id
         in: path
         required: true
-        schema: {type: string}
-    get:
-      tags: [Sessions]
-      responses:
-        '200': {description: Session details, content: {application/json: {schema: {$ref: '#/components/schemas/Session'}}}}
-
-  /sessions/{session_id}/terminate:
-    post:
-      tags: [Sessions]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [reason]
-              properties:
-                reason: {type: string, minLength: 10, maxLength: 2000}
-      responses:
-        '202': {description: Session termination accepted}
-
-  /sessions/{session_id}/events:
-    get:
-      tags: [Sessions, Audit]
-      responses:
-        '200': {description: Session lifecycle events}
-
-  /sessions/{session_id}/activity:
-    get:
-      tags: [Sessions]
-      responses:
-        '200': {description: Scoped session activity summary}
-
-  /sessions/{session_id}/risk:
-    get:
-      tags: [Sessions]
-      responses:
-        '200': {description: Current risk assessment}
-
-  /sessions/{session_id}/pause:
-    post:
-      tags: [Sessions]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '202': {description: Session pause accepted}
-
-  /sessions/{session_id}/resume:
-    post:
-      tags: [Sessions]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '202': {description: Session resume accepted}
-
-  /sessions/{session_id}/monitoring:
-    post:
-      tags: [Sessions]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [state]
-              properties:
-                state: {type: string, enum: [enabled, paused, disabled]}
-      responses:
-        '200': {description: Monitoring state updated}
-
-  /sessions/{session_id}/recording:
-    get:
-      tags: [Sessions]
-      responses:
-        '200': {description: Recording status and coverage}
-
-  /sessions/{session_id}/commands:
-    get:
-      tags: [Sessions, Audit]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Authorized command activity}
-
-  /recordings/{recording_id}:
-    get:
-      tags: [Audit]
-      responses:
-        '200': {description: Recording metadata}
-
-  /recordings/{recording_id}/playback-sessions:
-    post:
-      tags: [Audit]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [step_up_token]
-              properties:
-                step_up_token: {type: string}
-      responses:
-        '201': {description: Short-lived playback authorized}
-
-  /recordings/{recording_id}/exports:
-    post:
-      tags: [Audit]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [reason]
-              properties:
-                reason: {type: string, minLength: 10, maxLength: 2000}
-      responses:
-        '202': {description: Evidence export accepted}
-
-  /recording-exports/{export_id}:
-    get:
-      tags: [Audit]
-      responses:
-        '200': {description: Export status and expiring download reference}
-
-  /emergency-requests:
-    get:
-      tags: [Emergency]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Visible emergency requests}
-    post:
-      tags: [Emergency]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [asset_id, target_account_id, justification, requested_end_at, step_up_token]
-              properties:
-                asset_id: {type: string}
-                target_account_id: {type: string}
-                justification: {type: string, minLength: 10, maxLength: 2000}
-                requested_end_at: {$ref: '#/components/schemas/Timestamp'}
-                step_up_token: {type: string}
-      responses:
-        '201': {description: Emergency request created}
-
-  /emergency-requests/{emergency_id}:
-    get:
-      tags: [Emergency]
-      responses:
-        '200': {description: Emergency request details}
-
-  /emergency-requests/{emergency_id}/approve:
-    post:
-      tags: [Emergency]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [decision, reason]
-              properties:
-                decision: {type: string, enum: [approve, reject]}
-                reason: {type: string, minLength: 10, maxLength: 2000}
-      responses:
-        '201': {description: Emergency decision recorded}
-
-  /emergency-requests/{emergency_id}/activate:
-    post:
-      tags: [Emergency]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [step_up_token]
-              properties:
-                step_up_token: {type: string}
-      responses:
-        '200': {description: Emergency grant activated}
-
-  /emergency-requests/{emergency_id}/revoke:
-    post:
-      tags: [Emergency]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [reason]
-              properties:
-                reason: {type: string, minLength: 10, maxLength: 2000}
-      responses:
-        '202': {description: Emergency access revoked}
-
-  /emergency-requests/{emergency_id}/review:
-    get:
-      tags: [Emergency]
-      responses:
-        '200': {description: Post-access review evidence}
-
-  /rotation/jobs:
-    get:
-      tags: [Rotation]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Rotation jobs}
-    post:
-      tags: [Rotation]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [account_id]
-              properties:
-                account_id: {type: string}
-                policy_id: {type: string}
-      responses:
-        '201': {description: Rotation job created}
-
-  /rotation/jobs/{job_id}:
-    get:
-      tags: [Rotation]
-      responses:
-        '200': {description: Rotation job details and reconciliation state}
-
-  /rotation/jobs/{job_id}/cancel:
-    post:
-      tags: [Rotation]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
+        schema:
+          type: string
+          title: Session Id
+      - name: authorization
+        in: header
         required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                reason: {type: string, maxLength: 2000}
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '202': {description: Rotation cancellation accepted}
-
-  /rotation/policies:
-    get:
-      tags: [Rotation]
-      responses:
-        '200': {description: Rotation policies}
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Session Api V1 Sessions  Session Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sessions/{session_id}/terminate:
     post:
-      tags: [Rotation]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name, interval_days]
-              properties:
-                name: {type: string, maxLength: 200}
-                interval_days: {type: integer, minimum: 1, maximum: 3650}
-                require_verification: {type: boolean, default: true}
-      responses:
-        '201': {description: Rotation policy created}
-
-  /rotation/policies/{policy_id}:
-    patch:
-      tags: [Rotation]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name: {type: string, maxLength: 200}
-                interval_days: {type: integer, minimum: 1, maximum: 3650}
-                require_verification: {type: boolean}
-                expected_version: {type: integer, minimum: 0}
-      responses:
-        '200': {description: Rotation policy updated}
-
-  /discovery/jobs:
-    get:
-      tags: [Discovery]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Discovery jobs}
-    post:
-      tags: [Discovery]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [scope_ids, sources]
-              properties:
-                scope_ids: {type: array, minItems: 1, items: {type: string}}
-                sources: {type: array, minItems: 1, items: {type: string, enum: [linux_ssh, active_directory, database, network_device, cloud, virtualization]}}
-      responses:
-        '202': {description: Discovery started}
-
-  /discovery/jobs/{job_id}:
-    get:
-      tags: [Discovery]
-      responses:
-        '200': {description: Discovery job status}
-
-  /discovery/results:
-    get:
-      tags: [Discovery]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Discovered account findings}
-
-  /discovery/results/{result_id}/adopt:
-    post:
-      tags: [Discovery]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [asset_id, category]
-              properties:
-                asset_id: {type: string}
-                category: {type: string, enum: [root, administrator, service_account, database_administrator, network_administrator, privileged_account]}
-      responses:
-        '201': {description: Finding adopted as managed account}
-
-  /discovery/results/{result_id}/ignore:
-    post:
-      tags: [Discovery]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [reason]
-              properties:
-                reason: {type: string, minLength: 10, maxLength: 2000}
-      responses:
-        '200': {description: Finding ignored}
-
-  /integrations:
-    get:
-      tags: [Integrations]
-      responses:
-        '200': {description: Configured integrations}
-    post:
-      tags: [Integrations]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name, type]
-              properties:
-                name: {type: string, maxLength: 200}
-                type: {type: string, enum: [ldap, entra_id, siem, ticketing, smtp, syslog, webhook, cloud, kubernetes, vault, hsm]}
-                configuration: {type: object, additionalProperties: true}
-      responses:
-        '201': {description: Integration registered}
-
-  /integrations/{integration_id}:
-    get:
-      tags: [Integrations]
-      responses:
-        '200': {description: Safe integration metadata}
-    patch:
-      tags: [Integrations]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                configuration: {type: object, additionalProperties: true}
-                status: {type: string, enum: [enabled, disabled]}
-                expected_version: {type: integer, minimum: 0}
-      responses:
-        '200': {description: Integration updated}
-
-  /integrations/{integration_id}/test:
-    post:
-      tags: [Integrations]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '202': {description: Connectivity test started}
-
-  /integrations/{integration_id}/sync:
-    post:
-      tags: [Integrations]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '202': {description: Synchronization started}
-
-  /integrations/{integration_id}/disable:
-    post:
-      tags: [Integrations]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '200': {description: Integration disabled}
-
-  /integrations/{integration_id}/logs:
-    get:
-      tags: [Integrations]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Integration logs}
-
-  /notifications:
-    get:
-      tags: [Notifications]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Caller notifications}
-
-  /notifications/{notification_id}/read:
-    post:
-      tags: [Notifications]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '200': {description: Notification marked read}
-
-  /notifications/read-all:
-    post:
-      tags: [Notifications]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '200': {description: Notifications marked read}
-
-  /admin/notification-channels:
-    get:
-      tags: [Notifications, Administration]
-      responses:
-        '200': {description: Notification channels}
-    post:
-      tags: [Notifications, Administration]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name, type]
-              properties:
-                name: {type: string, maxLength: 200}
-                type: {type: string, enum: [email, smtp, webhook, syslog]}
-                configuration: {type: object, additionalProperties: true}
-      responses:
-        '201': {description: Channel configured}
-
-  /admin/webhooks:
-    get:
-      tags: [Notifications, Administration]
-      responses:
-        '200': {description: Registered webhooks}
-    post:
-      tags: [Notifications, Administration]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [url, event_types]
-              properties:
-                url: {type: string, format: uri}
-                event_types: {type: array, minItems: 1, items: {type: string}}
-                secret: {type: string, format: password, writeOnly: true}
-      responses:
-        '201': {description: Webhook registered}
-
-  /admin/webhooks/{webhook_id}:
-    patch:
-      tags: [Notifications, Administration]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                url: {type: string, format: uri}
-                event_types: {type: array, items: {type: string}}
-                status: {type: string, enum: [enabled, disabled]}
-                secret: {type: string, format: password, writeOnly: true}
-      responses:
-        '200': {description: Webhook updated}
-
-  /admin/webhooks/{webhook_id}/test:
-    post:
-      tags: [Notifications, Administration]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '202': {description: Webhook test queued}
-
-  /admin/webhooks/{webhook_id}/deliveries:
-    get:
-      tags: [Notifications, Administration]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Delivery history}
-
-  /reports:
-    get:
-      tags: [Reports]
-      responses:
-        '200': {description: Available reports}
-
-  /reports/generate:
-    post:
-      tags: [Reports]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [report_type]
-              properties:
-                report_type: {type: string, enum: [privileged_user_activity, approval_history, active_sessions, rotation_compliance, inactive_accounts, emergency_access, failed_logins, recording_coverage, policy_violations]}
-                from: {$ref: '#/components/schemas/Timestamp'}
-                to: {$ref: '#/components/schemas/Timestamp'}
-                scope_ids: {type: array, items: {type: string}}
-      responses:
-        '202': {description: Report generation started}
-
-  /reports/{report_id}:
-    get:
-      tags: [Reports]
-      responses:
-        '200': {description: Report status}
-
-  /reports/{report_id}/download:
-    get:
-      tags: [Reports]
-      responses:
-        '200': {description: Expiring report download reference}
-
-  /audit-events:
-    get:
-      tags: [Audit]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Permitted audit events}
-
-  /audit-events/{event_id}:
-    get:
-      tags: [Audit]
-      responses:
-        '200': {description: Audit event details}
-
-  /audit-events/verify:
-    get:
-      tags: [Audit]
+      tags:
+      - Session Operations
+      summary: Terminate Session
+      description: Terminate own session or one in operator scope.
+      operationId: terminate_session_api_v1_sessions__session_id__terminate_post
       parameters:
-        - name: from_event_id
-          in: query
-          schema: {type: string}
-        - name: to_event_id
-          in: query
-          schema: {type: string}
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_session_terminate
+          title: X-Correlation-Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': {description: Audit integrity verification result}
-
-  /compliance/summary:
-    get:
-      tags: [Reports]
-      responses:
-        '200': {description: Compliance summary}
-
-  /compliance/access-review:
-    get:
-      tags: [Reports]
-      responses:
-        '200': {description: Current access review findings}
-
-  /compliance/access-reviews:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Terminate Session Api V1 Sessions  Session Id  Terminate
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/change-proposals:
     post:
-      tags: [Reports]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      tags:
+      - Administration & Change Control
+      summary: Submit Change Proposal
+      description: Submit a proposed change to inventory, roles, or policy for independent
+        review.
+      operationId: submit_change_proposal_api_v1_admin_change_proposals_post
+      parameters:
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_admin_proposal
+          title: X-Correlation-Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [scope_ids]
-              properties:
-                scope_ids: {type: array, minItems: 1, items: {type: string}}
-                due_at: {$ref: '#/components/schemas/Timestamp'}
+              $ref: '#/components/schemas/AdminProposalInput'
       responses:
-        '201': {description: Access review started}
-
-  /compliance/access-reviews/{review_id}/decisions:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Submit Change Proposal Api V1 Admin Change Proposals
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/change-proposals/{proposal_id}:
+    get:
+      tags:
+      - Administration & Change Control
+      summary: Get Change Proposal
+      description: View a scoped change proposal.
+      operationId: get_change_proposal_api_v1_admin_change_proposals__proposal_id__get
+      parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Proposal Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Change Proposal Api V1 Admin Change Proposals  Proposal
+                  Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/change-proposals/{proposal_id}/decisions:
     post:
-      tags: [Reports]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      tags:
+      - Administration & Change Control
+      summary: Decide Change Proposal
+      description: 'Apply or reject an independently reviewed change.
+
+        Separation of duties: Author cannot review their own proposal.'
+      operationId: decide_change_proposal_api_v1_admin_change_proposals__proposal_id__decisions_post
+      parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Proposal Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_admin_decision
+          title: X-Correlation-Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminProposalDecisionInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Decide Change Proposal Api V1 Admin Change Proposals  Proposal
+                  Id  Decisions Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/backup/snapshots:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Create Backup Snapshot
+      description: Create a point-in-time snapshot across all PAM tables and compute
+        manifest digest.
+      operationId: create_backup_snapshot_api_v1_admin_backup_snapshots_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSnapshotInput'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Create Backup Snapshot Api V1 Admin Backup Snapshots
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/backup/restore-rehearsal:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Execute Restore Rehearsal
+      description: 'Execute disaster recovery restore rehearsal in isolated staging
+        session (P5-07 / NFR-04, T-09).
+
+        Measures RTO/RPO, verifies WORM evidence integrity, and reconciles stale grants
+        fail-closed.'
+      operationId: execute_restore_rehearsal_api_v1_admin_backup_restore_rehearsal_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreRehearsalInput'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupRehearsalResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/backup/rehearsals:
+    get:
+      tags:
+      - Administration & Change Control
+      summary: List Restore Rehearsals
+      description: List historical disaster recovery rehearsal reports.
+      operationId: list_restore_rehearsals_api_v1_admin_backup_rehearsals_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BackupRehearsalResponse'
+                title: Response List Restore Rehearsals Api V1 Admin Backup Rehearsals
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/vault/targets/{account_id}/store:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Store Target Vault Credential
+      description: 'Store or update an encrypted target credential in the vault store
+        (P4-03, SEC-08).
+
+        Restricted to Vault Custodians. Standard PAM Admins are forbidden (anti-superuser
+        principle).'
+      operationId: store_target_vault_credential_api_v1_admin_vault_targets__account_id__store_post
+      parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Account Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [subject_id, decision]
-              properties:
-                subject_id: {type: string}
-                decision: {type: string, enum: [retain, revoke, escalate]}
-                reason: {type: string, maxLength: 2000}
+              additionalProperties: true
+              title: Payload
       responses:
-        '201': {description: Access review decision recorded}
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Store Target Vault Credential Api V1 Admin Vault Targets  Account
+                  Id  Store Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/vault/targets/{account_id}/rotate:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Rotate Target Vault Credential
+      description: 'Manually trigger password/key rotation for a vault-backed target
+        account.
 
-  /health:
-    get:
-      tags: [Health]
-      security: []
-      responses:
-        '200': {description: Safe application health summary}
-        '503': {description: Service unhealthy}
-
-  /health/ready:
-    get:
-      tags: [Health]
-      security: []
-      responses:
-        '200': {description: Ready}
-        '503': {description: Not ready}
-
-  /health/live:
-    get:
-      tags: [Health]
-      security: []
-      responses:
-        '200': {description: Live}
-
-  /admin/system/info:
-    get:
-      tags: [Administration]
-      responses:
-        '200': {description: Safe system information}
-
-  /admin/system/config:
-    get:
-      tags: [Administration]
-      responses:
-        '200': {description: Safe configuration metadata}
-    patch:
-      tags: [Administration]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
+        Restricted to Vault Custodians (SEC-08).'
+      operationId: rotate_target_vault_credential_api_v1_admin_vault_targets__account_id__rotate_post
+      parameters:
+      - name: account_id
+        in: path
         required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [settings]
-              properties:
-                settings:
+        schema:
+          type: string
+          title: Account Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Rotate Target Vault Credential Api V1 Admin Vault
+                  Targets  Account Id  Rotate Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/vault/targets/{account_id}/status:
+    get:
+      tags:
+      - Administration & Change Control
+      summary: Get Target Vault Status
+      description: 'Retrieve vault credential status and rotation metadata for a target
+        account.
+
+        Plaintext secrets are NEVER disclosed (FR-06, SEC-05).
+
+        Conceals out-of-scope targets with HTTP 404.'
+      operationId: get_target_vault_status_api_v1_admin_vault_targets__account_id__status_get
+      parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Account Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Target Vault Status Api V1 Admin Vault Targets  Account
+                  Id  Status Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/integrations/wazuh/status:
+    get:
+      tags:
+      - Administration & Change Control
+      summary: Get Wazuh Adapter Status
+      description: Retrieve Wazuh SIEM adapter status, configuration, and observable
+        delivery metrics (P7-01, ADR-013).
+      operationId: get_wazuh_adapter_status_api_v1_admin_integrations_wazuh_status_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Wazuh Adapter Status Api V1 Admin Integrations
+                  Wazuh Status Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/integrations/wazuh/dispatch:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Dispatch Wazuh Outbox
+      description: Manually dispatch pending audit outbox events to Wazuh SIEM.
+      operationId: dispatch_wazuh_outbox_api_v1_admin_integrations_wazuh_dispatch_post
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Dispatch Wazuh Outbox Api V1 Admin Integrations Wazuh
+                  Dispatch Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/integrations/wazuh/test-event:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Send Wazuh Test Event
+      description: Generate and deliver a test security event to verify Wazuh integration
+        and rule decoding.
+      operationId: send_wazuh_test_event_api_v1_admin_integrations_wazuh_test_event_post
+      parameters:
+      - name: event_type
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ACCESS_GRANT_REVOKED
+          title: Event Type
+      - name: severity
+        in: query
+        required: false
+        schema:
+          type: string
+          default: HIGH
+          title: Severity
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Send Wazuh Test Event Api V1 Admin Integrations Wazuh
+                  Test Event Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/integrations/soc/status:
+    get:
+      tags:
+      - Administration & Change Control
+      summary: Get Soc Adapter Status
+      description: Retrieve Ariba SOC adapter status, routing metrics, and circuit
+        breaker health (P7-02, ADR-014).
+      operationId: get_soc_adapter_status_api_v1_admin_integrations_soc_status_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Soc Adapter Status Api V1 Admin Integrations Soc
+                  Status Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/integrations/soc/test-alert:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Send Soc Test Alert
+      description: Generate and route a synthetic incident alert to verify SOC priority
+        routing and correlation tracking.
+      operationId: send_soc_test_alert_api_v1_admin_integrations_soc_test_alert_post
+      parameters:
+      - name: alert_type
+        in: query
+        required: false
+        schema:
+          type: string
+          default: CAPTURE_FAILURE
+          title: Alert Type
+      - name: severity
+        in: query
+        required: false
+        schema:
+          type: string
+          default: CRITICAL
+          title: Severity
+      - name: correlation_id
+        in: query
+        required: false
+        schema:
+          type: string
+          default: corr_soc_admin_test
+          title: Correlation Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Send Soc Test Alert Api V1 Admin Integrations Soc
+                  Test Alert Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/integrations/soc/reset-failures:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Reset Soc Failures
+      description: Reset the consecutive failure counter and close the circuit breaker
+        for the SOC adapter.
+      operationId: reset_soc_failures_api_v1_admin_integrations_soc_reset_failures_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Reset Soc Failures Api V1 Admin Integrations Soc Reset
+                  Failures Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/integrations/idp/status:
+    get:
+      tags:
+      - Administration & Change Control
+      summary: Get Idp Federation Status
+      description: Retrieve enterprise IdP federation catalog, secondary providers,
+        and assurance policies (P7-03, ADR-015).
+      operationId: get_idp_federation_status_api_v1_admin_integrations_idp_status_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Idp Federation Status Api V1 Admin Integrations
+                  Idp Status Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/integrations/itsm/status:
+    get:
+      tags:
+      - Administration & Change Control
+      summary: Get Itsm Adapter Status
+      description: Retrieve enterprise ITSM adapter status, configuration, allowed
+        states, and metrics (P7-04, ADR-016).
+      operationId: get_itsm_adapter_status_api_v1_admin_integrations_itsm_status_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Itsm Adapter Status Api V1 Admin Integrations
+                  Itsm Status Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/integrations/itsm/validate-ticket:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Test Validate Ticket
+      description: Test ticket validation against ITSM provider for administrative
+        verification.
+      operationId: test_validate_ticket_api_v1_admin_integrations_itsm_validate_ticket_post
+      parameters:
+      - name: ticket_ref
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Ticket Ref
+      - name: requester_email
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Requester Email
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Test Validate Ticket Api V1 Admin Integrations Itsm
+                  Validate Ticket Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/ha/status:
+    get:
+      tags:
+      - Administration & Change Control
+      summary: Get Ha Cluster Status
+      description: Retrieve cluster High Availability topology, node health, and gateway
+        zone redundancy (P8-01, ADR-017).
+      operationId: get_ha_cluster_status_api_v1_admin_ha_status_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Ha Cluster Status Api V1 Admin Ha Status Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/ha/gateways/heartbeat:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Heartbeat Gateway Instance
+      description: Register or heartbeat an active gateway instance in a redundant
+        zone.
+      operationId: heartbeat_gateway_instance_api_v1_admin_ha_gateways_heartbeat_post
+      parameters:
+      - name: instance_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Instance Id
+      - name: zone_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Zone Id
+      - name: endpoint
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Endpoint
+      - name: active_sessions
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Active Sessions
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Heartbeat Gateway Instance Api V1 Admin Ha Gateways
+                  Heartbeat Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/ha/simulate-failover:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Simulate Ha Failover
+      description: Simulate a control plane node failure and measure switchover and
+        invariant preservation.
+      operationId: simulate_ha_failover_api_v1_admin_ha_simulate_failover_post
+      parameters:
+      - name: failed_node_id
+        in: query
+        required: false
+        schema:
+          type: string
+          default: cp-node-01
+          title: Failed Node Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Simulate Ha Failover Api V1 Admin Ha Simulate Failover
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/upgrade/status:
+    get:
+      tags:
+      - Administration & Change Control
+      summary: Get Upgrade Status
+      description: Retrieve cluster version, schema evolution compatibility, and node
+        rollout state (P8-02, ADR-018).
+      operationId: get_upgrade_status_api_v1_admin_upgrade_status_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Upgrade Status Api V1 Admin Upgrade Status Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/upgrade/simulate-roll:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Simulate Rolling Upgrade Drill
+      description: Simulate a zero-downtime rolling upgrade drill with active session
+        lease preservation.
+      operationId: simulate_rolling_upgrade_drill_api_v1_admin_upgrade_simulate_roll_post
+      parameters:
+      - name: simulated_active_sessions
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 20
+          title: Simulated Active Sessions
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Simulate Rolling Upgrade Drill Api V1 Admin Upgrade
+                  Simulate Roll Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/upgrade/simulate-rollback:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Simulate Rollback Drill
+      description: Simulate an emergency deployment rollback drill under active session
+        load.
+      operationId: simulate_rollback_drill_api_v1_admin_upgrade_simulate_rollback_post
+      parameters:
+      - name: simulated_active_sessions
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 20
+          title: Simulated Active Sessions
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Simulate Rollback Drill Api V1 Admin Upgrade Simulate
+                  Rollback Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/recovery/expanded-status:
+    get:
+      tags:
+      - Administration & Change Control
+      summary: Get Expanded Recovery Status
+      description: Retrieve expanded capacity disaster recovery baseline, SLA benchmarks,
+        and last drill result (P8-03, ADR-019).
+      operationId: get_expanded_recovery_status_api_v1_admin_recovery_expanded_status_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Expanded Recovery Status Api V1 Admin Recovery
+                  Expanded Status Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/recovery/simulate-expanded-drill:
+    post:
+      tags:
+      - Administration & Change Control
+      summary: Simulate Expanded Recovery Drill
+      description: Execute full expanded capacity disaster recovery rehearsal (database
+        restore, split-key recovery, evidence search).
+      operationId: simulate_expanded_recovery_drill_api_v1_admin_recovery_simulate_expanded_drill_post
+      parameters:
+      - name: scale
+        in: query
+        required: false
+        schema:
+          type: number
+          default: 1.0
+          title: Scale
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Simulate Expanded Recovery Drill Api V1 Admin Recovery
+                  Simulate Expanded Drill Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/audit-events:
+    get:
+      tags:
+      - Audit & Evidence
+      summary: Query Audit Events
+      description: 'Query audit evidence within caller''s scope.
+
+        Restricted to auditors, operators, and administrators.'
+      operationId: query_audit_events_api_v1_audit_events_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
                   type: object
                   additionalProperties: true
-                expected_version: {type: integer, minimum: 0}
-      responses:
-        '200': {description: Allowed configuration updated}
-
-  /admin/system/services:
-    get:
-      tags: [Administration]
-      responses:
-        '200': {description: Service status}
-
-  /admin/system/jobs:
-    get:
-      tags: [Administration]
-      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
-      responses:
-        '200': {description: Background job status}
-
-  /admin/system/storage:
-    get:
-      tags: [Administration]
-      responses:
-        '200': {description: Storage utilization}
-
-  /admin/system/metrics:
-    get:
-      tags: [Administration]
-      responses:
-        '200': {description: Permitted operational metrics}
-
-  /admin/change-proposals:
+                title: Response Query Audit Events Api V1 Audit Events Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/audit-events/verify-integrity:
     post:
-      tags: [Administration]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      tags:
+      - Audit & Evidence
+      summary: Verify Audit Integrity
+      description: 'Verify tamper-free WORM status of audit outbox records.
+
+        Custody boundary: Restricted strictly to Evidence Custodian or Auditor roles.
+
+        Routine PAM Administrators cannot verify or attest evidence custody.'
+      operationId: verify_audit_integrity_api_v1_audit_events_verify_integrity_post
+      parameters:
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_audit_verify
+          title: X-Correlation-Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [resource_type, resource_id, expected_version, change_payload, reason]
-              properties:
-                resource_type: {type: string, enum: [asset, role, policy, account]}
-                resource_id: {type: string}
-                expected_version: {type: integer, minimum: 0}
-                change_payload: {type: object, additionalProperties: true}
-                reason: {type: string, minLength: 10, maxLength: 2000}
+              $ref: '#/components/schemas/VerifyIntegrityInput'
       responses:
-        '201': {description: Scoped change proposal submitted}
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyIntegrityResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/audit-events/exports:
+    post:
+      tags:
+      - Audit & Evidence
+      summary: Create Audit Export
+      description: 'Create a sealed audit trail export bundle with SHA-256 manifest.
 
-  /admin/change-proposals/{proposal_id}:
+        Restricted strictly to Evidence Custodian or Auditor roles.'
+      operationId: create_audit_export_api_v1_audit_events_exports_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAuditExportInput'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditExportResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/audit-events/exports/{export_id}:
     get:
-      tags: [Administration]
-      responses:
-        '200': {description: Change proposal details}
+      tags:
+      - Audit & Evidence
+      summary: Get Audit Export
+      description: 'Retrieve export status and download reference.
 
-  /admin/change-proposals/{proposal_id}/decisions:
-    post:
-      tags: [Administration]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
+        Enforces identifier concealment (HTTP 404 for out-of-scope/unauthorized requests).'
+      operationId: get_audit_export_api_v1_audit_events_exports__export_id__get
+      parameters:
+      - name: export_id
+        in: path
         required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [decision, expected_version]
-              properties:
-                decision: {type: string, enum: [apply, reject]}
-                expected_version: {type: integer, minimum: 0}
-                reason: {type: string, maxLength: 2000}
+        schema:
+          type: string
+          title: Export Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '201': {description: Proposal independently reviewed}
-
-  /admin/gateways/register:
-    post:
-      tags: [Administration, Internal Gateway]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name, zone]
-              properties:
-                name: {type: string, maxLength: 200}
-                zone: {type: string, maxLength: 100}
-      responses:
-        '201': {description: Gateway enrollment created}
-
-  /admin/gateways:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditExportResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/recordings:
     get:
-      tags: [Administration, Internal Gateway]
+      tags:
+      - Recordings & Evidence Playback
+      summary: List Recordings
+      description: List recordings within caller's resource scope.
+      operationId: list_recordings_api_v1_recordings_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': {description: Gateway inventory}
-
-  /admin/gateways/{gateway_id}/health:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecordingResponse'
+                title: Response List Recordings Api V1 Recordings Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/recordings/{recording_id}:
     get:
-      tags: [Administration, Internal Gateway]
-      responses:
-        '200': {description: Gateway health}
+      tags:
+      - Recordings & Evidence Playback
+      summary: Get Recording
+      description: 'View scoped recording metadata, file size, and coverage status.
 
-  /admin/gateways/{gateway_id}/drain:
-    post:
-      tags: [Administration, Internal Gateway]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+        Anti-enumeration: Out-of-scope recording returns 404 Not Found.'
+      operationId: get_recording_api_v1_recordings__recording_id__get
+      parameters:
+      - name: recording_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Recording Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '202': {description: Gateway drain accepted}
-
-  /admin/gateways/{gateway_id}/revoke:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordingResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/recordings/{recording_id}/playback-sessions:
     post:
-      tags: [Administration, Internal Gateway]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      tags:
+      - Recordings & Evidence Playback
+      summary: Create Playback Session
+      description: 'Authorize short-lived playback streaming URL for scoped auditor
+        or operator.
+
+        Anti-enumeration: Cross-scope attempts return 404 Not Found.'
+      operationId: create_playback_session_api_v1_recordings__recording_id__playback_sessions_post
+      parameters:
+      - name: recording_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Recording Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_playback
+          title: X-Correlation-Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybackSessionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/recordings/{recording_id}/exports:
+    post:
+      tags:
+      - Recordings & Evidence Playback
+      summary: Create Recording Export
+      description: 'Initiate an auditable, scoped recording export job.
+
+        Requires Evidence Custodian or Auditor role and asset scope match.'
+      operationId: create_recording_export_api_v1_recordings__recording_id__exports_post
+      parameters:
+      - name: recording_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Recording Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_rec_export
+          title: X-Correlation-Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [reason]
-              properties:
-                reason: {type: string, minLength: 10, maxLength: 2000}
+              $ref: '#/components/schemas/CreateRecordingExportInput'
       responses:
-        '202': {description: Gateway identity revoked}
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordingExportResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/recording-exports/{export_id}:
+    get:
+      tags:
+      - Recordings & Evidence Playback
+      summary: Get Recording Export
+      description: 'Check export status and retrieve expiring download reference.
 
-  /internal/v1/credentials/leases:
+        Enforces identifier concealment: Out-of-scope export returns 404 Not Found.'
+      operationId: get_recording_export_api_v1_recording_exports__export_id__get
+      parameters:
+      - name: export_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Export Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordingExportResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts:
+    get:
+      tags:
+      - SOC Security Alerts & Health
+      summary: List Alerts
+      description: List enterprise SOC alerts with optional status, severity, and
+        type filters.
+      operationId: list_alerts_api_v1_alerts_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter by status (open, acknowledged, resolved)
+          title: Status
+        description: Filter by status (open, acknowledged, resolved)
+      - name: severity
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter by severity (CRITICAL, HIGH, WARNING)
+          title: Severity
+        description: Filter by severity (CRITICAL, HIGH, WARNING)
+      - name: alert_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter by alert type
+          title: Alert Type
+        description: Filter by alert type
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SOCAlertResponse'
+                title: Response List Alerts Api V1 Alerts Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/health/components:
+    get:
+      tags:
+      - SOC Security Alerts & Health
+      summary: Get Component Health
+      description: Aggregate health monitoring probe across database, outbox, CA,
+        and gateways.
+      operationId: get_component_health_api_v1_alerts_health_components_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Component Health Api V1 Alerts Health Components
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/{alert_id}:
+    get:
+      tags:
+      - SOC Security Alerts & Health
+      summary: Get Alert
+      description: Retrieve detailed SOC alert metadata.
+      operationId: get_alert_api_v1_alerts__alert_id__get
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Alert Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SOCAlertResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/{alert_id}/acknowledge:
     post:
-      tags: [Vault, Internal Gateway]
-      security:
-        - GatewayIdentity: []
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/XRequestId'}]
+      tags:
+      - SOC Security Alerts & Health
+      summary: Acknowledge Alert
+      description: Acknowledge an open security alert by an authorized security operator
+        or admin.
+      operationId: acknowledge_alert_api_v1_alerts__alert_id__acknowledge_post
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Alert Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_ack_alert
+          title: X-Correlation-Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SOCAlertResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/emergency-requests:
+    post:
+      tags:
+      - Emergency Break-Glass Access
+      summary: Submit Emergency Request
+      description: Submit an out-of-band emergency break-glass access request.
+      operationId: submit_emergency_request_api_v1_emergency_requests_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [session_id, grant_id, gateway_id, secret_id]
-              properties:
-                session_id: {type: string}
-                grant_id: {type: string}
-                gateway_id: {type: string}
-                secret_id: {type: string}
-                lease_deadline: {$ref: '#/components/schemas/Timestamp'}
+              $ref: '#/components/schemas/CreateEmergencyRequestInput'
       responses:
-        '201': {description: Short-lived credential lease issued}
-
-  /internal/v1/credentials/leases/{lease_id}/revoke:
-    post:
-      tags: [Vault, Internal Gateway]
-      security:
-        - GatewayIdentity: []
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyRequestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Emergency Break-Glass Access
+      summary: List Emergency Requests
+      description: List visible emergency break-glass requests.
+      operationId: list_emergency_requests_api_v1_emergency_requests_get
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter by status (pending, approved, active, revoked, reviewed)
+          title: Status
+        description: Filter by status (pending, approved, active, revoked, reviewed)
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       responses:
-        '200': {description: Credential lease revoked}
-
-  /internal/v1/credentials/leases/{lease_id}/acknowledge:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmergencyRequestResponse'
+                title: Response List Emergency Requests Api V1 Emergency Requests
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/emergency-requests/{emergency_id}:
+    get:
+      tags:
+      - Emergency Break-Glass Access
+      summary: Get Emergency Request
+      description: Retrieve details for a specific emergency break-glass request.
+      operationId: get_emergency_request_api_v1_emergency_requests__emergency_id__get
+      parameters:
+      - name: emergency_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Emergency Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyRequestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/emergency-requests/{emergency_id}/approve:
     post:
-      tags: [Vault, Internal Gateway]
-      security:
-        - GatewayIdentity: []
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      tags:
+      - Emergency Break-Glass Access
+      summary: Approve Emergency Request
+      description: Record custodian approval or rejection for emergency break-glass
+        access (SOD-04).
+      operationId: approve_emergency_request_api_v1_emergency_requests__emergency_id__approve_post
+      parameters:
+      - name: emergency_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Emergency Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [delivered_at]
-              properties:
-                delivered_at: {$ref: '#/components/schemas/Timestamp'}
+              $ref: '#/components/schemas/EmergencyDecisionInput'
       responses:
-        '200': {description: Credential delivery acknowledged}
-
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyRequestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/emergency-requests/{emergency_id}/activate:
+    post:
+      tags:
+      - Emergency Break-Glass Access
+      summary: Activate Emergency Access
+      description: Activate approved emergency access, issue launch credentials, and
+        trigger CRITICAL SOC alert.
+      operationId: activate_emergency_access_api_v1_emergency_requests__emergency_id__activate_post
+      parameters:
+      - name: emergency_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Emergency Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivateEmergencyInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Activate Emergency Access Api V1 Emergency Requests  Emergency
+                  Id  Activate Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/emergency-requests/{emergency_id}/revoke:
+    post:
+      tags:
+      - Emergency Break-Glass Access
+      summary: Revoke Emergency Access
+      description: Revoke emergency access fail-closed and terminate active sessions.
+      operationId: revoke_emergency_access_api_v1_emergency_requests__emergency_id__revoke_post
+      parameters:
+      - name: emergency_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Emergency Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeEmergencyInput'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyRequestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/emergency-requests/{emergency_id}/review:
+    post:
+      tags:
+      - Emergency Break-Glass Access
+      summary: Review Emergency Access
+      description: Post-access review and exercise sign-off by independent reviewer.
+      operationId: review_emergency_access_api_v1_emergency_requests__emergency_id__review_post
+      parameters:
+      - name: emergency_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Emergency Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewEmergencyInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyRequestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Emergency Break-Glass Access
+      summary: Get Emergency Review
+      description: Retrieve post-incident review report and evidence references.
+      operationId: get_emergency_review_api_v1_emergency_requests__emergency_id__review_get
+      parameters:
+      - name: emergency_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Emergency Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Emergency Review Api V1 Emergency Requests  Emergency
+                  Id  Review Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /internal/v1/launches/consume:
     post:
-      tags: [Grants, Internal Gateway]
-      security:
-        - GatewayIdentity: []
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}, {$ref: '#/components/parameters/XRequestId'}]
+      tags:
+      - Internal Gateway Interfaces
+      summary: Consume Launch
+      description: 'Gateway consumes a single-use launch capability.
+
+        Enforces atomic consumption, non-replay, expiry, and active grant status (T-04).'
+      operationId: consume_launch_internal_v1_launches_consume_post
+      parameters:
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_gateway_consume
+          title: X-Correlation-Id
+      - name: x-gateway-secret
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: X-Gateway-Secret
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [launch_id, gateway_id, requester_binding]
-              properties:
-                launch_id: {type: string}
-                gateway_id: {type: string}
-                requester_binding: {type: string}
+              $ref: '#/components/schemas/LaunchConsumeInput'
       responses:
-        '201': {description: Launch consumed and session created}
-
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Consume Launch Internal V1 Launches Consume Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /internal/v1/sessions/{session_id}/renew:
     post:
-      tags: [Sessions, Internal Gateway]
-      security:
-        - GatewayIdentity: []
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [gateway_id, observed_at]
-              properties:
-                gateway_id: {type: string}
-                observed_at: {$ref: '#/components/schemas/Timestamp'}
-      responses:
-        '200': {description: Renewal deadline returned}
+      tags:
+      - Internal Gateway Interfaces
+      summary: Renew Session Lease
+      description: 'Gateway renews session lease.
 
+        Returns deadline strictly bounded by grant expiry. Fails if grant was revoked.'
+      operationId: renew_session_lease_internal_v1_sessions__session_id__renew_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_gateway_renew
+          title: X-Correlation-Id
+      - name: x-gateway-secret
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: X-Gateway-Secret
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Renew Session Lease Internal V1 Sessions  Session
+                  Id  Renew Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /internal/v1/sessions/{session_id}/events:
     post:
-      tags: [Sessions, Internal Gateway, Audit]
-      security:
-        - GatewayIdentity: []
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      tags:
+      - Internal Gateway Interfaces
+      summary: Record Gateway Event
+      description: 'Gateway delivers session lifecycle evidence (e.g. terminated,
+        recording_saved).
+
+        Deduplicates and commits state changes.'
+      operationId: record_gateway_event_internal_v1_sessions__session_id__events_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_gateway_event
+          title: X-Correlation-Id
+      - name: x-gateway-secret
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: X-Gateway-Secret
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [source_event_id, sequence, state, occurred_at]
-              properties:
-                source_event_id: {type: string}
-                sequence: {type: integer, minimum: 1}
-                state: {type: string, enum: [requested, active, paused, terminated, ended, expired]}
-                reason_code: {type: string, nullable: true}
-                occurred_at: {$ref: '#/components/schemas/Timestamp'}
+              additionalProperties: true
+              title: Payload
       responses:
-        '202': {description: Gateway evidence accepted and deduplicated}
-
-  /internal/v1/gateways/register:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Record Gateway Event Internal V1 Sessions  Session
+                  Id  Events Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /internal/v1/sessions/{session_id}/sign-certificate:
     post:
-      tags: [Administration, Internal Gateway]
-      security:
-        - GatewayIdentity: []
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      tags:
+      - Internal Gateway Interfaces
+      summary: Sign Session Certificate
+      description: 'Gateway requests an ephemeral OpenSSH User Certificate for an
+        active session.
+
+        Signs certificate restricted strictly to the approved target account and remaining
+        grant time.'
+      operationId: sign_session_certificate_internal_v1_sessions__session_id__sign_certificate_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      - name: x-correlation-id
+        in: header
+        required: false
+        schema:
+          type: string
+          default: corr_gw_cert_sign
+          title: X-Correlation-Id
+      - name: x-gateway-secret
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: X-Gateway-Secret
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertificateSignInput'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateSignOutput'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /internal/v1/gateways/{gateway_id}/heartbeat:
+    post:
+      tags:
+      - Internal Gateway Interfaces
+      summary: Record Gateway Heartbeat
+      description: Gateway transmits 15-second health heartbeat and capture pipeline
+        status (FR-10, NFR-08).
+      operationId: record_gateway_heartbeat_internal_v1_gateways__gateway_id__heartbeat_post
+      parameters:
+      - name: gateway_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Gateway Id
+      - name: x-gateway-secret
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: X-Gateway-Secret
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GatewayHeartbeatInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Record Gateway Heartbeat Internal V1 Gateways  Gateway
+                  Id  Heartbeat Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /internal/v1/credentials/vault-secret:
+    post:
+      tags:
+      - Internal Gateway Interfaces
+      summary: Retrieve Vault Secret
+      description: 'Internal Gateway endpoint to retrieve target credentials for vault-backed
+        targets (P4-03).
+
+        Strictly verifies active grant and session, non-disclosure to client.'
+      operationId: retrieve_vault_secret_internal_v1_credentials_vault_secret_post
+      parameters:
+      - name: x-gateway-secret
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: X-Gateway-Secret
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [gateway_id, zone]
-              properties:
-                gateway_id: {type: string}
-                zone: {type: string}
-                certificate_fingerprint: {type: string}
+              additionalProperties: true
+              title: Payload
       responses:
-        '201': {description: Gateway enrolled}
-
-  /internal/v1/gateways/heartbeat:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Retrieve Vault Secret Internal V1 Credentials Vault
+                  Secret Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /internal/v1/rdp/tunnel-parameters:
     post:
-      tags: [Administration, Internal Gateway]
-      security:
-        - GatewayIdentity: []
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      tags:
+      - Internal Gateway Interfaces
+      summary: Compile Rdp Tunnel Parameters
+      description: 'Gateway retrieves compiled RDP connection parameters (P6-01, ADR-012).
+
+        Injects vault password, validates grant and session, and enforces clipboard/drive
+        restrictions.'
+      operationId: compile_rdp_tunnel_parameters_internal_v1_rdp_tunnel_parameters_post
+      parameters:
+      - name: x-gateway-secret
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: X-Gateway-Secret
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [gateway_id, observed_at, state]
-              properties:
-                gateway_id: {type: string}
-                observed_at: {$ref: '#/components/schemas/Timestamp'}
-                state: {type: string, enum: [healthy, degraded, unavailable]}
+              additionalProperties: true
+              title: Payload
       responses:
-        '200': {description: Heartbeat accepted}
-
-  /internal/v1/gateways:
-    get:
-      tags: [Administration, Internal Gateway]
-      security:
-        - GatewayIdentity: []
-      responses:
-        '200': {description: Gateway inventory}
-
-  /internal/v1/gateways/{gateway_id}/health:
-    get:
-      tags: [Administration, Internal Gateway]
-      security:
-        - GatewayIdentity: []
-      responses:
-        '200': {description: Gateway health}
-
-  /internal/v1/gateways/{gateway_id}/drain:
-    post:
-      tags: [Administration, Internal Gateway]
-      security:
-        - GatewayIdentity: []
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '202': {description: Gateway drain accepted}
-
-  /internal/v1/gateways/{gateway_id}/revoke:
-    post:
-      tags: [Administration, Internal Gateway]
-      security:
-        - GatewayIdentity: []
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
-      responses:
-        '202': {description: Gateway identity revoked}
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Compile Rdp Tunnel Parameters Internal V1 Rdp Tunnel
+                  Parameters Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    ActivateEmergencyInput:
+      properties:
+        step_up_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Step Up Token
+          default: mfa_step_up_valid
+      type: object
+      title: ActivateEmergencyInput
+      description: POST /api/v1/emergency-requests/{id}/activate payload.
+    AdminProposalDecisionInput:
+      properties:
+        decision:
+          type: string
+          pattern: ^(applied|rejected)$
+          title: Decision
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+      type: object
+      required:
+      - decision
+      title: AdminProposalDecisionInput
+      description: POST /api/v1/admin/change-proposals/{proposal_id}/decisions payload.
+    AdminProposalInput:
+      properties:
+        resource_type:
+          type: string
+          pattern: ^(asset|role|policy)$
+          title: Resource Type
+        resource_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resource Id
+        change_payload:
+          additionalProperties: true
+          type: object
+          title: Change Payload
+        expected_version:
+          type: integer
+          minimum: 0.0
+          title: Expected Version
+          default: 1
+        reason:
+          type: string
+          minLength: 5
+          title: Reason
+      type: object
+      required:
+      - resource_type
+      - change_payload
+      - reason
+      title: AdminProposalInput
+      description: POST /api/v1/admin/change-proposals payload.
+    AssetResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        environment:
+          type: string
+          title: Environment
+        team:
+          type: string
+          title: Team
+        zone_id:
+          type: string
+          title: Zone Id
+        host:
+          type: string
+          title: Host
+        port:
+          type: integer
+          title: Port
+        is_active:
+          type: boolean
+          title: Is Active
+        accounts:
+          items:
+            $ref: '#/components/schemas/TargetAccountResponse'
+          type: array
+          title: Accounts
+      type: object
+      required:
+      - id
+      - name
+      - environment
+      - team
+      - zone_id
+      - host
+      - port
+      - is_active
+      - accounts
+      title: AssetResponse
+      description: Asset with available target accounts.
+    AuditExportResponse:
+      properties:
+        export_id:
+          type: string
+          title: Export Id
+        export_type:
+          type: string
+          title: Export Type
+        status:
+          type: string
+          title: Status
+        record_count:
+          type: integer
+          title: Record Count
+        manifest_sha256:
+          type: string
+          title: Manifest Sha256
+        storage_uri:
+          type: string
+          title: Storage Uri
+        download_url:
+          type: string
+          title: Download Url
+        justification:
+          type: string
+          title: Justification
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        requester_id:
+          type: string
+          title: Requester Id
+      type: object
+      required:
+      - export_id
+      - export_type
+      - status
+      - record_count
+      - manifest_sha256
+      - storage_uri
+      - download_url
+      - justification
+      - expires_at
+      - created_at
+      - requester_id
+      title: AuditExportResponse
+      description: Audit export bundle response.
+    BackupRehearsalResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        exercise_ref:
+          type: string
+          title: Exercise Ref
+        operator_id:
+          type: string
+          title: Operator Id
+        snapshot_id:
+          type: string
+          title: Snapshot Id
+        rto_seconds:
+          type: number
+          title: Rto Seconds
+        rpo_seconds:
+          type: number
+          title: Rpo Seconds
+        target_rto_seconds:
+          type: number
+          title: Target Rto Seconds
+        target_rpo_seconds:
+          type: number
+          title: Target Rpo Seconds
+        status:
+          type: string
+          title: Status
+        restored_counts:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Restored Counts
+        reconciled_grants_count:
+          type: integer
+          title: Reconciled Grants Count
+        reconciled_sessions_count:
+          type: integer
+          title: Reconciled Sessions Count
+        worm_verified:
+          type: boolean
+          title: Worm Verified
+        notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Notes
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - exercise_ref
+      - operator_id
+      - snapshot_id
+      - rto_seconds
+      - rpo_seconds
+      - target_rto_seconds
+      - target_rpo_seconds
+      - status
+      - restored_counts
+      - reconciled_grants_count
+      - reconciled_sessions_count
+      - worm_verified
+      - created_at
+      title: BackupRehearsalResponse
+      description: Restore rehearsal record response.
+    CertificateSignInput:
+      properties:
+        client_public_key:
+          type: string
+          minLength: 10
+          title: Client Public Key
+      type: object
+      required:
+      - client_public_key
+      title: CertificateSignInput
+      description: Internal gateway POST /internal/v1/sessions/{session_id}/sign-certificate
+        payload.
+    CertificateSignOutput:
+      properties:
+        certificate:
+          type: string
+          title: Certificate
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+        principal:
+          type: string
+          title: Principal
+        serial:
+          type: integer
+          title: Serial
+        ca_fingerprint:
+          type: string
+          title: Ca Fingerprint
+      type: object
+      required:
+      - certificate
+      - expires_at
+      - principal
+      - serial
+      - ca_fingerprint
+      title: CertificateSignOutput
+      description: Signed certificate response for gateway.
+    CreateAuditExportInput:
+      properties:
+        justification:
+          type: string
+          minLength: 5
+          title: Justification
+        scope_filter:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Scope Filter
+        limit:
+          type: integer
+          maximum: 1000.0
+          minimum: 1.0
+          title: Limit
+          default: 200
+      type: object
+      required:
+      - justification
+      title: CreateAuditExportInput
+      description: POST /api/v1/audit-events/exports payload.
+    CreateEmergencyRequestInput:
+      properties:
+        asset_id:
+          type: string
+          title: Asset Id
+        target_account_id:
+          type: string
+          title: Target Account Id
+        justification:
+          type: string
+          maxLength: 2000
+          minLength: 10
+          title: Justification
+        requested_end_at:
+          type: string
+          format: date-time
+          title: Requested End At
+        step_up_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Step Up Token
+        required_approvals:
+          type: integer
+          title: Required Approvals
+          default: 2
+      type: object
+      required:
+      - asset_id
+      - target_account_id
+      - justification
+      - requested_end_at
+      title: CreateEmergencyRequestInput
+      description: POST /api/v1/emergency-requests payload.
+    CreateRecordingExportInput:
+      properties:
+        justification:
+          type: string
+          minLength: 5
+          title: Justification
+      type: object
+      required:
+      - justification
+      title: CreateRecordingExportInput
+      description: POST /api/v1/recordings/{recording_id}/exports payload.
+    CreateRequestInput:
+      properties:
+        asset_id:
+          type: string
+          title: Asset Id
+        target_account_id:
+          type: string
+          title: Target Account Id
+        requested_start_at:
+          type: string
+          format: date-time
+          title: Requested Start At
+        requested_end_at:
+          type: string
+          format: date-time
+          title: Requested End At
+        justification:
+          type: string
+          minLength: 5
+          title: Justification
+        ticket_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ticket Ref
+      type: object
+      required:
+      - asset_id
+      - target_account_id
+      - requested_start_at
+      - requested_end_at
+      - justification
+      title: CreateRequestInput
+      description: POST /api/v1/requests payload.
+    CreateSnapshotInput:
+      properties:
+        label:
+          type: string
+          title: Label
+          default: dr_rehearsal_snapshot
+      type: object
+      title: CreateSnapshotInput
+      description: POST /api/v1/admin/backup/snapshots payload.
+    DecisionInput:
+      properties:
+        expected_revision_id:
+          type: string
+          title: Expected Revision Id
+        decision:
+          type: string
+          pattern: ^(approved|rejected)$
+          title: Decision
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+      type: object
+      required:
+      - expected_revision_id
+      - decision
+      title: DecisionInput
+      description: POST /api/v1/approval-steps/{step_id}/decisions payload.
+    EmergencyApprovalResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        custodian_id:
+          type: string
+          title: Custodian Id
+        decision:
+          type: string
+          title: Decision
+        reason:
+          type: string
+          title: Reason
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - custodian_id
+      - decision
+      - reason
+      - created_at
+      title: EmergencyApprovalResponse
+      description: Emergency approval decision details.
+    EmergencyDecisionInput:
+      properties:
+        decision:
+          type: string
+          title: Decision
+          default: approve
+        reason:
+          type: string
+          maxLength: 2000
+          minLength: 10
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: EmergencyDecisionInput
+      description: POST /api/v1/emergency-requests/{id}/approve payload.
+    EmergencyRequestResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        asset_id:
+          type: string
+          title: Asset Id
+        target_account_id:
+          type: string
+          title: Target Account Id
+        requester_id:
+          type: string
+          title: Requester Id
+        justification:
+          type: string
+          title: Justification
+        status:
+          type: string
+          title: Status
+        required_approvals:
+          type: integer
+          title: Required Approvals
+        approval_count:
+          type: integer
+          title: Approval Count
+        requested_end_at:
+          type: string
+          format: date-time
+          title: Requested End At
+        activated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Activated At
+        revoked_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Revoked At
+        revocation_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Revocation Reason
+        reviewed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Reviewed At
+        reviewer_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reviewer Id
+        review_notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Review Notes
+        grant_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Grant Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        approvals:
+          items:
+            $ref: '#/components/schemas/EmergencyApprovalResponse'
+          type: array
+          title: Approvals
+          default: []
+      type: object
+      required:
+      - id
+      - asset_id
+      - target_account_id
+      - requester_id
+      - justification
+      - status
+      - required_approvals
+      - approval_count
+      - requested_end_at
+      - created_at
+      title: EmergencyRequestResponse
+      description: Emergency break-glass request details.
+    GatewayHeartbeatInput:
+      properties:
+        zone_id:
+          type: string
+          title: Zone Id
+        status:
+          type: string
+          title: Status
+          default: healthy
+        active_sessions_count:
+          type: integer
+          title: Active Sessions Count
+          default: 0
+        capture_status:
+          type: string
+          title: Capture Status
+          default: healthy
+      type: object
+      required:
+      - zone_id
+      title: GatewayHeartbeatInput
+      description: POST /internal/v1/gateways/{gateway_id}/heartbeat payload.
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    IdPLifecycleEventInput:
+      properties:
+        event_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Event Id
+        event_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Event Type
+        idp_issuer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idp Issuer
+        idp_subject:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idp Subject
+        email:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Email
+        timestamp:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Timestamp
+        id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Id
+        subscriptionId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Subscriptionid
+        resourceData:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Resourcedata
+        schemas:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Schemas
+        Operations:
+          anyOf:
+          - items:
+              additionalProperties: true
+              type: object
+            type: array
+          - type: 'null'
+          title: Operations
+        externalId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Externalid
+        userName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Username
+      additionalProperties: true
+      type: object
+      title: IdPLifecycleEventInput
+    LaunchConsumeInput:
+      properties:
+        launch_token:
+          type: string
+          title: Launch Token
+        gateway_id:
+          type: string
+          title: Gateway Id
+      type: object
+      required:
+      - launch_token
+      - gateway_id
+      title: LaunchConsumeInput
+      description: Internal gateway POST /internal/v1/launches/consume payload.
+    PlaybackSessionResponse:
+      properties:
+        recording_id:
+          type: string
+          title: Recording Id
+        playback_url:
+          type: string
+          title: Playback Url
+        token:
+          type: string
+          title: Token
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+      type: object
+      required:
+      - recording_id
+      - playback_url
+      - token
+      - expires_at
+      title: PlaybackSessionResponse
+      description: POST /api/v1/recordings/{recording_id}/playback-sessions response.
+    RecordingExportResponse:
+      properties:
+        export_id:
+          type: string
+          title: Export Id
+        recording_id:
+          type: string
+          title: Recording Id
+        status:
+          type: string
+          title: Status
+        manifest_sha256:
+          type: string
+          title: Manifest Sha256
+        storage_uri:
+          type: string
+          title: Storage Uri
+        download_url:
+          type: string
+          title: Download Url
+        justification:
+          type: string
+          title: Justification
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        requester_id:
+          type: string
+          title: Requester Id
+      type: object
+      required:
+      - export_id
+      - recording_id
+      - status
+      - manifest_sha256
+      - storage_uri
+      - download_url
+      - justification
+      - expires_at
+      - created_at
+      - requester_id
+      title: RecordingExportResponse
+      description: Recording export job response.
+    RecordingResponse:
+      properties:
+        recording_id:
+          type: string
+          title: Recording Id
+        session_id:
+          type: string
+          title: Session Id
+        asset_id:
+          type: string
+          title: Asset Id
+        asset_name:
+          type: string
+          title: Asset Name
+        target_account:
+          type: string
+          title: Target Account
+        duration_seconds:
+          type: integer
+          title: Duration Seconds
+        size_bytes:
+          type: integer
+          title: Size Bytes
+        coverage_status:
+          type: string
+          title: Coverage Status
+        digest_sha256:
+          type: string
+          title: Digest Sha256
+        storage_uri:
+          type: string
+          title: Storage Uri
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - recording_id
+      - session_id
+      - asset_id
+      - asset_name
+      - target_account
+      - duration_seconds
+      - size_bytes
+      - coverage_status
+      - digest_sha256
+      - storage_uri
+      - created_at
+      title: RecordingResponse
+      description: GET /api/v1/recordings/{recording_id} response.
+    ReplaceRevisionInput:
+      properties:
+        expected_revision_id:
+          type: string
+          title: Expected Revision Id
+        target_account_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Target Account Id
+        requested_start_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Requested Start At
+        requested_end_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Requested End At
+        justification:
+          anyOf:
+          - type: string
+            minLength: 5
+          - type: 'null'
+          title: Justification
+        ticket_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ticket Ref
+      type: object
+      required:
+      - expected_revision_id
+      title: ReplaceRevisionInput
+      description: POST /api/v1/requests/{request_id}/revisions payload.
+    RestoreRehearsalInput:
+      properties:
+        exercise_ref:
+          type: string
+          title: Exercise Ref
+          default: EX-2026-DR-01
+        snapshot:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Snapshot
+        simulated_data_loss_seconds:
+          type: number
+          title: Simulated Data Loss Seconds
+          default: 12.0
+      type: object
+      title: RestoreRehearsalInput
+      description: POST /api/v1/admin/backup/restore-rehearsal payload.
+    ReviewEmergencyInput:
+      properties:
+        review_notes:
+          type: string
+          maxLength: 2000
+          minLength: 10
+          title: Review Notes
+      type: object
+      required:
+      - review_notes
+      title: ReviewEmergencyInput
+      description: POST /api/v1/emergency-requests/{id}/review payload.
+    RevokeEmergencyInput:
+      properties:
+        reason:
+          type: string
+          maxLength: 2000
+          minLength: 5
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: RevokeEmergencyInput
+      description: POST /api/v1/emergency-requests/{id}/revoke payload.
+    RevokeGrantInput:
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: RevokeGrantInput
+      description: POST /api/v1/grants/{grant_id}/revoke payload.
+    SOCAlertResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        alert_type:
+          type: string
+          title: Alert Type
+        severity:
+          type: string
+          title: Severity
+        title:
+          type: string
+          title: Title
+        description:
+          type: string
+          title: Description
+        correlation_id:
+          type: string
+          title: Correlation Id
+        session_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Session Id
+        gateway_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gateway Id
+        asset_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Asset Id
+        details:
+          additionalProperties: true
+          type: object
+          title: Details
+          default: {}
+        status:
+          type: string
+          title: Status
+        acknowledged_by_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Acknowledged By Id
+        acknowledged_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Acknowledged At
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - alert_type
+      - severity
+      - title
+      - description
+      - correlation_id
+      - status
+      - created_at
+      title: SOCAlertResponse
+      description: GET /api/v1/alerts response.
+    SyntheticLoginInput:
+      properties:
+        email:
+          type: string
+          title: Email
+        idp_issuer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idp Issuer
+        idp_subject:
+          type: string
+          title: Idp Subject
+        amr:
+          items:
+            type: string
+          type: array
+          title: Amr
+      type: object
+      required:
+      - email
+      - idp_subject
+      title: SyntheticLoginInput
+    TargetAccountResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        username:
+          type: string
+          title: Username
+        is_active:
+          type: boolean
+          title: Is Active
+        requires_ticket:
+          type: boolean
+          title: Requires Ticket
+        max_duration_seconds:
+          type: integer
+          title: Max Duration Seconds
+      type: object
+      required:
+      - id
+      - username
+      - is_active
+      - requires_ticket
+      - max_duration_seconds
+      title: TargetAccountResponse
+      description: Target account details.
+    UserProfileResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        email:
+          type: string
+          title: Email
+        full_name:
+          type: string
+          title: Full Name
+        is_active:
+          type: boolean
+          title: Is Active
+        roles:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Roles
+        permitted_scopes:
+          items:
+            additionalProperties:
+              type: string
+            type: object
+          type: array
+          title: Permitted Scopes
+      type: object
+      required:
+      - id
+      - email
+      - full_name
+      - is_active
+      - roles
+      - permitted_scopes
+      title: UserProfileResponse
+      description: GET /api/v1/me response.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    VerifyIntegrityInput:
+      properties:
+        batch_limit:
+          type: integer
+          maximum: 1000.0
+          minimum: 1.0
+          title: Batch Limit
+          default: 100
+      type: object
+      title: VerifyIntegrityInput
+      description: POST /api/v1/audit-events/verify-integrity payload.
+    VerifyIntegrityResponse:
+      properties:
+        verified:
+          type: boolean
+          title: Verified
+        events_checked:
+          type: integer
+          title: Events Checked
+        tampered_event_ids:
+          items:
+            type: string
+          type: array
+          title: Tampered Event Ids
+        hash_algorithm:
+          type: string
+          title: Hash Algorithm
+        verified_at:
+          type: string
+          format: date-time
+          title: Verified At
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - verified
+      - events_checked
+      - tampered_event_ids
+      - hash_algorithm
+      - verified_at
+      - message
+      title: VerifyIntegrityResponse
+      description: POST /api/v1/audit-events/verify-integrity response.

@@ -10,6 +10,7 @@ import {
   Activity,
   Lock,
   Video,
+  Cpu,
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -103,6 +104,13 @@ export default function RootLayout({
               >
                 <Video className="w-4 h-4 text-blue-400" />
                 <span>Audit Forensics</span>
+              </Link>
+              <Link
+                href="/operations"
+                className="px-4 py-2.5 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-md transition-colors flex items-center space-x-2"
+              >
+                <Cpu className="w-4 h-4 text-purple-400" />
+                <span>Operations</span>
               </Link>
             </div>
           </nav>
