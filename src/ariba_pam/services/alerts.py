@@ -15,12 +15,25 @@ class SOCAlertsService:
 
     def __init__(self):
         self._receiver: Optional[Callable[[Dict[str, Any]], bool]] = None
+        self._receivers: List[Callable[[Dict[str, Any]], bool]] = []
         self._gateway_heartbeats: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
 
     def set_receiver(self, receiver: Optional[Callable[[Dict[str, Any]], bool]]) -> None:
         """Register custom SOC/SIEM delivery receiver (e.g. Wazuh / Splunk / Webhook)."""
         self._receiver = receiver
+
+    def add_receiver(self, receiver: Callable[[Dict[str, Any]], bool]) -> None:
+        """Register an additional event receiver to the broadcast list."""
+        with self._lock:
+            if receiver not in self._receivers:
+                self._receivers.append(receiver)
+
+    def remove_receiver(self, receiver: Callable[[Dict[str, Any]], bool]) -> None:
+        """Unregister an event receiver from the broadcast list."""
+        with self._lock:
+            if receiver in self._receivers:
+                self._receivers.remove(receiver)
 
     def record_alert(
         self,
@@ -93,6 +106,14 @@ class SOCAlertsService:
         if self._receiver:
             try:
                 self._receiver(alert_payload)
+            except Exception:
+                pass
+
+        with self._lock:
+            active_receivers = list(self._receivers)
+        for rec in active_receivers:
+            try:
+                rec(alert_payload)
             except Exception:
                 pass
 

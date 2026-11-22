@@ -42,6 +42,17 @@ class Settings(BaseSettings):
     wazuh_dedup_window_seconds: int = 300
     wazuh_verify_ssl: bool = True
 
+    # Ariba SOC Event Adapter (P7-02, ADR-014)
+    soc_adapter_enabled: bool = False
+    soc_webhook_url: str = "https://soc.internal/webhooks/alerts"
+    soc_critical_webhook_url: str = "https://soc.internal/webhooks/critical-incidents"
+    soc_api_key: str = "synthetic-soc-api-key"
+    soc_max_retries: int = 3
+    soc_backoff_base_seconds: float = 0.1
+    soc_failure_threshold_for_alert: int = 3
+    soc_timeout_seconds: float = 5.0
+    soc_verify_ssl: bool = True
+
     # CORS
     cors_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 

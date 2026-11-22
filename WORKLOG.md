@@ -9,8 +9,8 @@ This file is the single source of truth for repository progress, session handove
 ## 1. Current Repository State
 
 - **Branch**: `main` (Synchronized with `origin/main` at `https://github.com/boniyeamincse/aariba-pam-.git`)
-- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Active (`P7-01` Complete · `P7-02: Add an Ariba SOC event adapter` Next)
-- **Control Plane Test Health**: `114 passed, 2 skipped` (`DEBUG=false pytest -v`)
+- **Current Milestone**: Phase 6 Complete (`P6-01` & `P6-02` Complete) · Phase 7 Active (`P7-01` & `P7-02` Complete · `P7-03: Evaluate an additional IdP` Next)
+- **Control Plane Test Health**: `123 passed, 2 skipped` (`DEBUG=false pytest -v`)
 - **Gateway Test Health**: `15 passed` (`cd gateway && go test -v ./...`)
 - **Web Console Build Health**: `10/10 routes compiled successfully` (`cd web && npm run build`)
 - **Database Migration State**: Alembic head (`0008_rdp_support.py`)
@@ -32,6 +32,37 @@ Every AI agent must follow the rules defined in these configuration files:
 ---
 
 ## 3. Work Log & Session History
+
+### Session 20: Ariba SOC Event Adapter with Priority Routing, Correlation Tracking & Failure Monitoring (`P7-02`) (Current)
+- **Date**: 2026-11-22
+- **Completed Work**:
+  1. **Architecture Decision Record (`decisions/architecture-decisions.md`)**:
+     - Documented `ADR-014: Adopt Ariba SOC Event Adapter with Priority Routing, Correlation Tracking, and Delivery Failure Monitoring`.
+     - Specified multi-tier priority routing (Critical to emergency channels, High/Medium to operational triage, Low to audit streams), strict correlation identifier propagation, runbook enrichment, and consecutive delivery failure monitoring with circuit-breaker degradation.
+  2. **Integration Architecture Documentation (`docs/16-INTEGRATION-ARCHITECTURE.md`)**:
+     - Added Section 2.2 detailing the Ariba SOC Event Adapter architecture, priority tier taxonomy, structured JSON incident contract, and circuit breaker failure threshold.
+  3. **SOC Adapter Configuration (`src/ariba_pam/config.py`)**:
+     - Added `soc_adapter_enabled`, `soc_webhook_url`, `soc_critical_webhook_url`, `soc_api_key`, `soc_max_retries`, `soc_backoff_base_seconds`, `soc_failure_threshold_for_alert`, `soc_timeout_seconds`, `soc_verify_ssl`.
+  4. **Multi-Receiver Alert Broadcaster (`src/ariba_pam/services/alerts.py`)**:
+     - Upgraded `SOCAlertsService` with thread-safe `add_receiver` and `remove_receiver` broadcaster mechanisms, enabling simultaneous real-time dispatch to both SIEM and SOC adapters.
+  5. **Ariba SOC Domain Service (`src/ariba_pam/services/soc_adapter.py`)**:
+     - Built `AribaSOCAdapter` enforcing:
+       - Multi-tier priority routing (`critical_channel`, `triage_channel`, `audit_stream_channel`).
+       - Strict correlation identifier propagation (`correlation_id`, `trace_id`, `incident_id`), auto-generating deterministic traced identifiers when omitted.
+       - Runbook catalog enrichment (`RB-SEC-01` to `RB-SEC-09`, `RB-SEC-99`).
+       - Observable exponential backoff retry on transient upstream delivery faults.
+       - Consecutive delivery failure tracking, degrading circuit breaker to `DEGRADED` upon hitting threshold, and automatically escalating via an emergency `SOC_DELIVERY_FAILURE` outbox alert.
+       - Automatic recovery to `HEALTHY` on subsequent successful delivery, with manual operator reset capability.
+  6. **Admin API Endpoints (`src/ariba_pam/api/v1/admin.py`)**:
+     - Added `GET /api/v1/admin/integrations/soc/status` for real-time metrics and circuit state inspection.
+     - Added `POST /api/v1/admin/integrations/soc/test-alert` to generate and route synthetic incident alerts.
+     - Added `POST /api/v1/admin/integrations/soc/reset-failures` to manually reset consecutive failure counters and close the circuit breaker.
+  7. **Comprehensive Unit & Integration Test Suite (`tests/test_soc_adapter.py`)**:
+     - 9 tests covering priority channel classification, correlation tracking and generation, runbook catalog enrichment, tracing headers, observable exponential retry, delivery failure monitoring with outbox escalation, circuit breaker recovery, admin status/test endpoints with RBAC protection, and `SOCAlertsService` broadcast integration.
+- **Verified Evidence**:
+  - `DEBUG=false pytest -v`: **123 passed, 2 skipped** (in 6.13s).
+  - `cd gateway && go test -v ./...`: **15 passed** (in 4.45s).
+  - `cd web && npm run build`: **10/10 static routes compiled successfully**.
 
 ### Session 19: Wazuh SIEM Event Adapter with Filtering, Deduplication & Observable Retry (`P7-01`)
 - **Date**: 2026-11-22

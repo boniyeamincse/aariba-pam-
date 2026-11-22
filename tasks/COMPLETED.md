@@ -50,6 +50,7 @@
 | P6-01 | Select an RDP implementation and Windows lab matrix | [decisions/architecture-decisions.md](../decisions/architecture-decisions.md) (ADR-012), [docs/14-SESSION-GATEWAY-DESIGN.md](../docs/14-SESSION-GATEWAY-DESIGN.md), [src/ariba_pam/services/rdp.py](../src/ariba_pam/services/rdp.py), [gateway/client.go](../gateway/client.go), [tests/test_rdp_gateway.py](../tests/test_rdp_gateway.py) |
 | P6-02 | Validate RDP authorization and evidence in the lab | [gateway/rdp.go](../gateway/rdp.go), [gateway/rdp_test.go](../gateway/rdp_test.go), [tests/test_rdp_session_lifecycle.py](../tests/test_rdp_session_lifecycle.py) |
 | P7-01 | Add a Wazuh event adapter | [decisions/architecture-decisions.md](../decisions/architecture-decisions.md) (ADR-013), [docs/16-INTEGRATION-ARCHITECTURE.md](../docs/16-INTEGRATION-ARCHITECTURE.md), [src/ariba_pam/services/wazuh.py](../src/ariba_pam/services/wazuh.py), [src/ariba_pam/api/v1/admin.py](../src/ariba_pam/api/v1/admin.py), [tests/test_wazuh_adapter.py](../tests/test_wazuh_adapter.py) |
+| P7-02 | Add an Ariba SOC event adapter | [decisions/architecture-decisions.md](../decisions/architecture-decisions.md) (ADR-014), [docs/16-INTEGRATION-ARCHITECTURE.md](../docs/16-INTEGRATION-ARCHITECTURE.md), [src/ariba_pam/services/soc_adapter.py](../src/ariba_pam/services/soc_adapter.py), [src/ariba_pam/api/v1/admin.py](../src/ariba_pam/api/v1/admin.py), [tests/test_soc_adapter.py](../tests/test_soc_adapter.py) |
 
 Phase 0 approvals, implementation, and pilot test results are tracked when evidence becomes available.
 
