@@ -22,6 +22,7 @@ This repository contains the product and engineering baseline, a Python control 
 | 11 | [API specification](docs/11-API-SPECIFICATION.md) | Proposed v1 interfaces and errors |
 | 12 | [UI/UX guidelines](docs/12-UI-UX-GUIDELINES.md) | Portal navigation, interaction, and state |
 | 13 | [Security requirements](docs/13-SECURITY-REQUIREMENTS.md) | Threats, controls, and verification |
+| 13A | [Authentication and authorization](docs/authentication-authorization.md) | Identity sources, MFA, RBAC, resource scope, revocation, and service authorization |
 | 14 | [Technology stack](docs/14-TECHNOLOGY-STACK.md) | Proposed components and selection criteria |
 | 15 | [Docker strategy](docs/15-DOCKER-STRATEGY.md) | Local, test, and pilot packaging and isolation |
 | 16 | [Testing strategy](docs/16-TESTING-STRATEGY.md) | Test layers, pilot checks, and evidence |
